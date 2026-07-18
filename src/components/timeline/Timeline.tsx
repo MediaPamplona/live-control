@@ -1,6 +1,6 @@
 import { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react'
 import type { Cue, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
-import { NUM_CAMERAS, MUSIC_TRACK_NUM } from '@/lib/types'
+import { NUM_CAMERAS, MUSIC_TRACK_NUM, CAM_COLORS } from '@/lib/types'
 import TimelineRuler from './TimelineRuler'
 import TimelineTrack from './TimelineTrack'
 
@@ -67,6 +67,7 @@ interface Props {
   singerCues?: SingerCue[]
   selectedSingerCueId?: string | null
   activeSingerId?: string | null
+  highlightCameraNumber?: number | null
   onCueCreate?: (cue: Omit<Cue, 'id'>) => Promise<Cue | null>
   onCueUpdate?: (id: string, patch: Partial<Omit<Cue, 'id' | 'song_id'>>) => void
   onCueSelect?: (id: string | null) => void
@@ -101,6 +102,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     singerCues = [],
     selectedSingerCueId = null,
     activeSingerId = null,
+    highlightCameraNumber = null,
     onCueCreate,
     onCueUpdate,
     onCueSelect,
@@ -724,8 +726,14 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
 
         {/* Camera tracks */}
         {Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1).map((camNum) => (
-          <TimelineTrack
+          <div
             key={camNum}
+            style={highlightCameraNumber === camNum ? {
+              background: `${CAM_COLORS[camNum - 1]}14`,
+              boxShadow: `inset 3px 0 0 ${CAM_COLORS[camNum - 1]}`,
+            } : undefined}
+          >
+          <TimelineTrack
             cameraNumber={camNum}
             cues={displayCues.filter((c) => c.camera_number === camNum)}
             durationSecs={durationSecs}
@@ -742,6 +750,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
               onPointerDownCreate: (e, ref) => camOnPointerDownCreate(e, camNum, ref),
             }}
           />
+          </div>
         ))}
 
         {/* MÚSICA track — last */}
