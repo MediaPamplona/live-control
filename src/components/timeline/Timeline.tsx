@@ -232,13 +232,12 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
       if (readonly || !songId) return
       if (camNum === MUSIC_TRACK_NUM && localCues.some((c) => c.camera_number === MUSIC_TRACK_NUM)) return
       e.preventDefault()
-      const el = scrollRef.current!
       const rect = containerRef.current!.getBoundingClientRect()
-      const startSec = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec)
+      const startSec = Math.max(0, (e.clientX - rect.left) / pxPerSec)
       setDragOp({ type: 'creating', camNum, startSec, endSec: startSec, containerRef })
       const snapPts = getSnapPoints(localCues)
       const onMove = (me: PointerEvent) => {
-        const rawEnd = Math.max(startSec, (me.clientX - rect.left + el.scrollLeft) / pxPerSec)
+        const rawEnd = Math.max(startSec, (me.clientX - rect.left) / pxPerSec)
         const snapped = snapToPoints(rawEnd, snapPts, pxPerSec)
         setDragOp((d) => d.type === 'creating' ? { ...d, endSec: Math.min(snapped, durationSecs) } : d)
       }
@@ -362,13 +361,12 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     (instrumentId: string) => (e: React.PointerEvent, containerRef: React.RefObject<HTMLDivElement | null>) => {
       if (readonly || !songId) return
       e.preventDefault()
-      const el = scrollRef.current!
       const rect = containerRef.current!.getBoundingClientRect()
-      const startSec = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec)
+      const startSec = Math.max(0, (e.clientX - rect.left) / pxPerSec)
       setInstrDragOp({ type: 'creating', instrumentId, startSec, endSec: startSec, containerRef })
       const snapPts = getSnapPoints(localInstrumentCues.filter((c) => c.instrument_id === instrumentId))
       const onMove = (me: PointerEvent) => {
-        const rawEnd = Math.max(startSec, (me.clientX - rect.left + el.scrollLeft) / pxPerSec)
+        const rawEnd = Math.max(startSec, (me.clientX - rect.left) / pxPerSec)
         const snapped = snapToPoints(rawEnd, snapPts, pxPerSec)
         setInstrDragOp((d) => d.type === 'creating' ? { ...d, endSec: Math.min(snapped, durationSecs) } : d)
       }
@@ -529,13 +527,12 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     (singerId: string) => (e: React.PointerEvent, containerRef: React.RefObject<HTMLDivElement | null>) => {
       if (readonly || !songId) return
       e.preventDefault()
-      const el = scrollRef.current!
       const rect = containerRef.current!.getBoundingClientRect()
-      const startSec = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec)
+      const startSec = Math.max(0, (e.clientX - rect.left) / pxPerSec)
       setSingerDragOp({ type: 'creating', singerId, startSec, endSec: startSec, containerRef })
       const snapPts = getSnapPoints(localSingerCues.filter((c) => c.singer_id === singerId))
       const onMove = (me: PointerEvent) => {
-        const rawEnd = Math.max(startSec, (me.clientX - rect.left + el.scrollLeft) / pxPerSec)
+        const rawEnd = Math.max(startSec, (me.clientX - rect.left) / pxPerSec)
         const snapped = snapToPoints(rawEnd, snapPts, pxPerSec)
         setSingerDragOp((d) => d.type === 'creating' ? { ...d, endSec: Math.min(snapped, durationSecs) } : d)
       }
