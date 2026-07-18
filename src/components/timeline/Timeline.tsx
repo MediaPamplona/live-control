@@ -297,6 +297,48 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
       e.preventDefault()
       const cue = localInstrumentCues.find((c) => c.id === cueId)!
       const duration = cue.end_sec - cue.start_sec
+
+      // Alt/Option+drag: leave the original in place and drag off a copy;
+      // the copy is only persisted (as a new cue) on release.
+      if (e.altKey) {
+        const tempId = `temp-${Date.now()}`
+        const ghost: InstrumentCue = { ...cue, id: tempId }
+        const snapPts = getSnapPoints(localInstrumentCues.filter((c) => c.instrument_id === cue.instrument_id))
+        setLocalInstrumentCues((prev) => [...prev, ghost])
+        setInstrDragOp({ type: 'moving', cueId: tempId, startX: e.clientX, origStart: cue.start_sec, origEnd: cue.end_sec })
+        const onMove = (me: PointerEvent) => {
+          const dx = (me.clientX - e.clientX) / pxPerSec
+          let newStart = Math.max(0, Math.min(durationSecs - duration, cue.start_sec + dx))
+          const snappedStart = snapToPoints(newStart, snapPts, pxPerSec)
+          const snappedEnd = snapToPoints(newStart + duration, snapPts, pxPerSec)
+          if (Math.abs(snappedStart - newStart) < Math.abs(snappedEnd - (newStart + duration))) newStart = snappedStart
+          else newStart = snappedEnd - duration
+          newStart = Math.max(0, Math.min(durationSecs - duration, newStart))
+          setLocalInstrumentCues((prev) => prev.map((c) => c.id === tempId ? { ...c, start_sec: newStart, end_sec: newStart + duration } : c))
+        }
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove)
+          window.removeEventListener('pointerup', onUp)
+          setLocalInstrumentCues((prev) => {
+            const dropped = prev.find((c) => c.id === tempId)
+            if (dropped) {
+              onInstrumentCueCreate?.({
+                song_id: cue.song_id,
+                instrument_id: cue.instrument_id,
+                start_sec: dropped.start_sec,
+                end_sec: dropped.end_sec,
+                note: cue.note,
+              })
+            }
+            return prev.filter((c) => c.id !== tempId)
+          })
+          setInstrDragOp({ type: 'idle' })
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+        return
+      }
+
       setInstrDragOp({ type: 'moving', cueId, startX: e.clientX, origStart: cue.start_sec, origEnd: cue.end_sec })
       const snapPts = getSnapPoints(localInstrumentCues.filter((c) => c.instrument_id === cue.instrument_id), cueId)
       const onMove = (me: PointerEvent) => {
@@ -322,7 +364,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
     },
-    [readonly, pxPerSec, localInstrumentCues, durationSecs, onInstrumentCueUpdate]
+    [readonly, pxPerSec, localInstrumentCues, durationSecs, onInstrumentCueUpdate, onInstrumentCueCreate]
   )
 
   const instOnPointerDownResizeLeft = useCallback(
