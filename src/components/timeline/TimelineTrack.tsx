@@ -76,6 +76,8 @@ export default function TimelineTrack({
           padding: '0 2px',
           lineHeight: 1.2,
           wordBreak: 'break-word',
+          transform: 'translateZ(0)',
+          willChange: 'transform',
         }}
       >
         {label}
