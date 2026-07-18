@@ -708,6 +708,13 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
   const displayInstrumentCues = instrDragOp.type === 'idle' ? instrumentCues : localInstrumentCues
   const displaySingerCues = singerDragOp.type === 'idle' ? singerCues : localSingerCues
 
+  // When a camera is highlighted (camera view), its own row goes first so
+  // that operator can see when they're in/out without hunting for their row.
+  const allCamNums = Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1)
+  const cameraOrder = highlightCameraNumber
+    ? [highlightCameraNumber, ...allCamNums.filter((n) => n !== highlightCameraNumber)]
+    : allCamNums
+
   return (
     <div
       className="relative flex-1 overflow-hidden no-select flex"
@@ -721,7 +728,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
           <div style={{ height: 28 }} />
           {instruments.length > 0 && <TimelineTrackLabel trackLabel="INST" trackColor="#6B6F76" trackHeight={48} />}
           {singers.length > 0 && <TimelineTrackLabel trackLabel="VOCES" trackColor="#6B6F76" trackHeight={48} />}
-          {Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1).map((camNum) => (
+          {cameraOrder.map((camNum) => (
             <div
               key={camNum}
               style={highlightCameraNumber === camNum ? {
@@ -823,7 +830,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
         )}
 
         {/* Camera tracks */}
-        {Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1).map((camNum) => (
+        {cameraOrder.map((camNum) => (
           <div
             key={camNum}
             style={highlightCameraNumber === camNum ? {
