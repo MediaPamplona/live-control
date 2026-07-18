@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import type { Show, Song, Cue, Instrument, InstrumentCue } from '@/lib/types'
-import { INSTRUMENT_COLORS } from '@/lib/types'
+import type { Show, Song, Cue, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
+import { INSTRUMENT_COLORS, SINGER_COLORS } from '@/lib/types'
 
 function getAudioDuration(file: File): Promise<number | null> {
   return new Promise((resolve) => {
@@ -29,6 +29,8 @@ export function useShow({ showId, showCode }: UseShowOptions) {
   const [cues, setCues] = useState<Cue[]>([])
   const [instruments, setInstruments] = useState<Instrument[]>([])
   const [instrumentCues, setInstrumentCues] = useState<InstrumentCue[]>([])
+  const [singers, setSingers] = useState<Singer[]>([])
+  const [singerCues, setSingerCues] = useState<SingerCue[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -75,14 +77,23 @@ export function useShow({ showId, showCode }: UseShowOptions) {
         const { data: instCuesRaw } = await supabase
           .from('instrument_cues').select('*').in('song_id', songIds)
         setInstrumentCues((instCuesRaw ?? []) as InstrumentCue[])
+
+        const { data: singerCuesRaw } = await supabase
+          .from('singer_cues').select('*').in('song_id', songIds)
+        setSingerCues((singerCuesRaw ?? []) as SingerCue[])
       } else {
         setCues([])
         setInstrumentCues([])
+        setSingerCues([])
       }
 
       const { data: instRaw } = await supabase
         .from('instruments').select('*').eq('show_id', showData.id).order('sort_order')
       setInstruments((instRaw ?? []) as Instrument[])
+
+      const { data: singersRaw } = await supabase
+        .from('singers').select('*').eq('show_id', showData.id).order('sort_order')
+      setSingers((singersRaw ?? []) as Singer[])
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error desconocido')
     } finally {
@@ -235,6 +246,67 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     setInstrumentCues((prev) => prev.filter((c) => c.id !== id))
   }, [])
 
+  // --- Singers ---
+  const addSinger = useCallback(async (name: string): Promise<Singer | null> => {
+    if (!show) return null
+    const maxOrder = singers.reduce((m, s) => Math.max(m, s.sort_order), -1)
+    const color = SINGER_COLORS[singers.length % SINGER_COLORS.length]
+    const { data, error: err } = await supabase
+      .from('singers')
+      .insert({ show_id: show.id, name, color, sort_order: maxOrder + 1 })
+      .select().single()
+    if (err) { notifyError(`Error al crear cantante: ${err.message}`); return null }
+    const singer = data as Singer
+    setSingers((prev) => [...prev, singer])
+    return singer
+  }, [show, singers])
+
+  const updateSinger = useCallback(async (id: string, patch: Partial<Pick<Singer, 'name' | 'color'>>) => {
+    const { error: err } = await supabase.from('singers').update(patch).eq('id', id)
+    if (err) { notifyError(`Error al actualizar cantante: ${err.message}`); return }
+    setSingers((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s))
+  }, [])
+
+  const deleteSinger = useCallback(async (id: string) => {
+    const { error: err } = await supabase.from('singers').delete().eq('id', id)
+    if (err) { notifyError(`Error al eliminar cantante: ${err.message}`); return }
+    setSingers((prev) => prev.filter((s) => s.id !== id))
+    setSingerCues((prev) => prev.filter((c) => c.singer_id !== id))
+  }, [])
+
+  // --- Singer cues ---
+  const addSingerCue = useCallback(async (cue: Omit<SingerCue, 'id'>): Promise<SingerCue | null> => {
+    const { data, error: err } = await supabase.from('singer_cues').insert(cue).select().single()
+    if (err) { notifyError(`Error al guardar bloque: ${err.message}`); return null }
+    const created = data as SingerCue
+    setSingerCues((prev) => [...prev, created])
+    return created
+  }, [])
+
+  const uploadSingerImage = useCallback(async (singerId: string, file: File): Promise<string | null> => {
+    const ext = file.name.split('.').pop()
+    const path = `singer-${singerId}.${ext}`
+    const { error: upErr } = await supabase.storage
+      .from('cue-images').upload(path, file, { upsert: true })
+    if (upErr) { console.error(upErr); return null }
+    const { data } = supabase.storage.from('cue-images').getPublicUrl(path)
+    const url = data.publicUrl
+    await supabase.from('singers').update({ image_url: url }).eq('id', singerId)
+    setSingers((prev) => prev.map((s) => s.id === singerId ? { ...s, image_url: url } : s))
+    return url
+  }, [])
+
+  const updateSingerCue = useCallback(async (id: string, patch: Partial<Pick<SingerCue, 'start_sec' | 'end_sec' | 'note'>>) => {
+    const { error: err } = await supabase.from('singer_cues').update(patch).eq('id', id)
+    if (err) { notifyError(`Error al actualizar bloque: ${err.message}`); return }
+    setSingerCues((prev) => prev.map((c) => c.id === id ? { ...c, ...patch } : c))
+  }, [])
+
+  const deleteSingerCue = useCallback(async (id: string) => {
+    await supabase.from('singer_cues').delete().eq('id', id)
+    setSingerCues((prev) => prev.filter((c) => c.id !== id))
+  }, [])
+
   const uploadSongAudio = useCallback(async (songId: string, file: File): Promise<string | null> => {
     const ext = file.name.split('.').pop()
     const path = `${songId}.${ext}`
@@ -267,6 +339,7 @@ export function useShow({ showId, showCode }: UseShowOptions) {
   return {
     show, songs, cues, loading, error,
     instruments, instrumentCues,
+    singers, singerCues,
     reload: loadShow,
     createShow, updateShowName,
     saveError,
@@ -274,6 +347,8 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     addCue, updateCue, deleteCue, uploadCueImage,
     addInstrument, updateInstrument, deleteInstrument, uploadInstrumentImage,
     addInstrumentCue, updateInstrumentCue, deleteInstrumentCue,
+    addSinger, updateSinger, deleteSinger, uploadSingerImage,
+    addSingerCue, updateSingerCue, deleteSingerCue,
     setCues,
   }
 }

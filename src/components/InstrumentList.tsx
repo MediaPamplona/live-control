@@ -5,6 +5,9 @@ import { INSTRUMENT_COLORS } from '@/lib/types'
 interface Props {
   instruments: Instrument[]
   selectedId?: string | null
+  title?: string
+  colors?: string[]
+  addPlaceholder?: string
   onSelect?: (id: string) => void
   onAdd: (name: string) => void
   onRename: (id: string, name: string) => void
@@ -12,7 +15,10 @@ interface Props {
   onDelete: (id: string) => void
 }
 
-export default function InstrumentList({ instruments, selectedId, onSelect, onAdd, onRename, onColorChange, onDelete }: Props) {
+export default function InstrumentList({
+  instruments, selectedId, title = 'Instrumentos', colors = INSTRUMENT_COLORS, addPlaceholder = 'Nombre...',
+  onSelect, onAdd, onRename, onColorChange, onDelete,
+}: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editVal, setEditVal] = useState('')
   const [adding, setAdding] = useState(false)
@@ -33,7 +39,7 @@ export default function InstrumentList({ instruments, selectedId, onSelect, onAd
   return (
     <div className="flex flex-col" style={{ maxHeight: 200 }}>
       <div className="flex items-center justify-between px-3 py-1.5 border-t border-b border-border flex-shrink-0" style={{ background: '#0F1114' }}>
-        <span className="font-display text-xs uppercase tracking-widest text-muted">Instrumentos</span>
+        <span className="font-display text-xs uppercase tracking-widest text-muted">{title}</span>
         <button
           className="text-muted hover:text-cream font-mono text-base leading-none"
           onClick={() => { setAdding(true); setTimeout(() => inputRef.current?.focus(), 0) }}
@@ -48,7 +54,7 @@ export default function InstrumentList({ instruments, selectedId, onSelect, onAd
               ref={inputRef}
               className="flex-1 bg-transparent border-b border-muted text-cream font-mono outline-none"
               style={{ fontSize: 11 }}
-              placeholder="Nombre..."
+              placeholder={addPlaceholder}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onBlur={commitAdd}
@@ -62,7 +68,7 @@ export default function InstrumentList({ instruments, selectedId, onSelect, onAd
 
         {instruments.length === 0 && !adding && (
           <p className="font-mono text-muted px-3 py-2" style={{ fontSize: 10 }}>
-            Sin instrumentos aún
+            Ninguno aún
           </p>
         )}
 
@@ -91,8 +97,8 @@ export default function InstrumentList({ instruments, selectedId, onSelect, onAd
                 title="Cambiar color"
                 onClick={(e) => {
                   e.stopPropagation()
-                  const idx = INSTRUMENT_COLORS.indexOf(inst.color)
-                  onColorChange(inst.id, INSTRUMENT_COLORS[(idx + 1) % INSTRUMENT_COLORS.length])
+                  const idx = colors.indexOf(inst.color)
+                  onColorChange(inst.id, colors[(idx + 1) % colors.length])
                 }}
               />
 

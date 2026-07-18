@@ -103,12 +103,42 @@ create table if not exists public.instrument_cues (
 create index if not exists instrument_cues_song_id_idx       on public.instrument_cues(song_id);
 create index if not exists instrument_cues_instrument_id_idx on public.instrument_cues(instrument_id);
 
+-- 6b. Tabla singers (solistas y cantantes)
+create table if not exists public.singers (
+  id         uuid    primary key default gen_random_uuid(),
+  show_id    uuid    not null references public.shows(id) on delete cascade,
+  name       text    not null default 'Nuevo cantante',
+  color      text    not null default '#F43F5E',
+  sort_order integer not null default 0,
+  image_url  text,
+  created_at timestamptz default now()
+);
+
+create index if not exists singers_show_id_idx on public.singers(show_id);
+create index if not exists singers_order_idx   on public.singers(show_id, sort_order);
+
+-- 6c. Tabla singer_cues
+create table if not exists public.singer_cues (
+  id         uuid    primary key default gen_random_uuid(),
+  song_id    uuid    not null references public.songs(id) on delete cascade,
+  singer_id  uuid    not null references public.singers(id) on delete cascade,
+  start_sec  numeric not null check (start_sec >= 0),
+  end_sec    numeric not null check (end_sec > start_sec),
+  note       text,
+  created_at timestamptz default now()
+);
+
+create index if not exists singer_cues_song_id_idx   on public.singer_cues(song_id);
+create index if not exists singer_cues_singer_id_idx on public.singer_cues(singer_id);
+
 -- 7. RLS (Row Level Security)
 alter table public.shows           enable row level security;
 alter table public.songs           enable row level security;
 alter table public.cues            enable row level security;
 alter table public.instruments     enable row level security;
 alter table public.instrument_cues enable row level security;
+alter table public.singers         enable row level security;
+alter table public.singer_cues     enable row level security;
 
 -- Acceso público de lectura (director y cámaras sin login)
 drop policy if exists "public read shows"           on public.shows;
@@ -116,12 +146,16 @@ drop policy if exists "public read songs"           on public.songs;
 drop policy if exists "public read cues"            on public.cues;
 drop policy if exists "public read instruments"     on public.instruments;
 drop policy if exists "public read instrument_cues" on public.instrument_cues;
+drop policy if exists "public read singers"         on public.singers;
+drop policy if exists "public read singer_cues"     on public.singer_cues;
 
 create policy "public read shows"           on public.shows           for select using (true);
 create policy "public read songs"           on public.songs           for select using (true);
 create policy "public read cues"            on public.cues            for select using (true);
 create policy "public read instruments"     on public.instruments     for select using (true);
 create policy "public read instrument_cues" on public.instrument_cues for select using (true);
+create policy "public read singers"         on public.singers         for select using (true);
+create policy "public read singer_cues"     on public.singer_cues     for select using (true);
 
 -- Escritura pública (sin auth por ahora — añadir auth más adelante si se necesita)
 drop policy if exists "public write shows"           on public.shows;
@@ -129,12 +163,16 @@ drop policy if exists "public write songs"           on public.songs;
 drop policy if exists "public write cues"            on public.cues;
 drop policy if exists "public write instruments"     on public.instruments;
 drop policy if exists "public write instrument_cues" on public.instrument_cues;
+drop policy if exists "public write singers"         on public.singers;
+drop policy if exists "public write singer_cues"     on public.singer_cues;
 
 create policy "public write shows"           on public.shows           for all using (true) with check (true);
 create policy "public write songs"           on public.songs           for all using (true) with check (true);
 create policy "public write cues"            on public.cues            for all using (true) with check (true);
 create policy "public write instruments"     on public.instruments     for all using (true) with check (true);
 create policy "public write instrument_cues" on public.instrument_cues for all using (true) with check (true);
+create policy "public write singers"         on public.singers         for all using (true) with check (true);
+create policy "public write singer_cues"     on public.singer_cues     for all using (true) with check (true);
 
 -- 8. Buckets de Storage
 insert into storage.buckets (id, name, public)

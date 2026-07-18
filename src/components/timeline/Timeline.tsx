@@ -1,5 +1,5 @@
 import { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react'
-import type { Cue, Instrument, InstrumentCue } from '@/lib/types'
+import type { Cue, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
 import { NUM_CAMERAS, MUSIC_TRACK_NUM } from '@/lib/types'
 import TimelineRuler from './TimelineRuler'
 import TimelineTrack from './TimelineTrack'
@@ -37,6 +37,14 @@ type InstrDragOp =
   | { type: 'resizing-left'; cueId: string; startX: number; origStart: number; origEnd: number }
   | { type: 'resizing-right'; cueId: string; startX: number; origEnd: number; origStart: number }
 
+// ── Singer drag ops ──
+type SingerDragOp =
+  | { type: 'idle' }
+  | { type: 'creating'; singerId: string; startSec: number; endSec: number; containerRef: React.RefObject<HTMLDivElement | null> }
+  | { type: 'moving'; cueId: string; startX: number; origStart: number; origEnd: number }
+  | { type: 'resizing-left'; cueId: string; startX: number; origStart: number; origEnd: number }
+  | { type: 'resizing-right'; cueId: string; startX: number; origEnd: number; origStart: number }
+
 export interface TimelineHandle {
   scrollToSec: (sec: number) => void
 }
@@ -55,6 +63,10 @@ interface Props {
   instrumentCues?: InstrumentCue[]
   selectedInstrumentCueId?: string | null
   activeInstrumentId?: string | null
+  singers?: Singer[]
+  singerCues?: SingerCue[]
+  selectedSingerCueId?: string | null
+  activeSingerId?: string | null
   onCueCreate?: (cue: Omit<Cue, 'id'>) => Promise<Cue | null>
   onCueUpdate?: (id: string, patch: Partial<Omit<Cue, 'id' | 'song_id'>>) => void
   onCueSelect?: (id: string | null) => void
@@ -63,6 +75,10 @@ interface Props {
   onInstrumentCueUpdate?: (id: string, patch: Partial<Pick<InstrumentCue, 'start_sec' | 'end_sec' | 'note'>>) => void
   onInstrumentCueSelect?: (id: string | null) => void
   onInstrumentCueDelete?: (id: string) => void
+  onSingerCueCreate?: (cue: Omit<SingerCue, 'id'>) => Promise<SingerCue | null>
+  onSingerCueUpdate?: (id: string, patch: Partial<Pick<SingerCue, 'start_sec' | 'end_sec' | 'note'>>) => void
+  onSingerCueSelect?: (id: string | null) => void
+  onSingerCueDelete?: (id: string) => void
   onSeek?: (sec: number) => void
 }
 
@@ -81,6 +97,10 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     instrumentCues = [],
     selectedInstrumentCueId = null,
     activeInstrumentId = null,
+    singers = [],
+    singerCues = [],
+    selectedSingerCueId = null,
+    activeSingerId = null,
     onCueCreate,
     onCueUpdate,
     onCueSelect,
@@ -89,6 +109,10 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     onInstrumentCueUpdate,
     onInstrumentCueSelect,
     onInstrumentCueDelete,
+    onSingerCueCreate,
+    onSingerCueUpdate,
+    onSingerCueSelect,
+    onSingerCueDelete,
     onSeek,
   },
   ref
@@ -96,11 +120,14 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
   const scrollRef = useRef<HTMLDivElement>(null)
   const [localCues, setLocalCues] = useState<Cue[]>(cues)
   const [localInstrumentCues, setLocalInstrumentCues] = useState<InstrumentCue[]>(instrumentCues)
+  const [localSingerCues, setLocalSingerCues] = useState<SingerCue[]>(singerCues)
   const [dragOp, setDragOp] = useState<DragOp>({ type: 'idle' })
   const [instrDragOp, setInstrDragOp] = useState<InstrDragOp>({ type: 'idle' })
+  const [singerDragOp, setSingerDragOp] = useState<SingerDragOp>({ type: 'idle' })
 
   useEffect(() => { if (dragOp.type === 'idle') setLocalCues(cues) }, [cues, dragOp.type])
   useEffect(() => { if (instrDragOp.type === 'idle') setLocalInstrumentCues(instrumentCues) }, [instrumentCues, instrDragOp.type])
+  useEffect(() => { if (singerDragOp.type === 'idle') setLocalSingerCues(singerCues) }, [singerCues, singerDragOp.type])
 
   useImperativeHandle(ref, () => ({
     scrollToSec(sec) {
@@ -425,6 +452,173 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     [readonly, pxPerSec, localInstrumentCues, durationSecs, onInstrumentCueUpdate]
   )
 
+  // ── Singer track drag handlers ──
+
+  const singerOnPointerDownCreate = useCallback(
+    (singerId: string) => (e: React.PointerEvent, containerRef: React.RefObject<HTMLDivElement | null>) => {
+      if (readonly || !songId) return
+      e.preventDefault()
+      const el = scrollRef.current!
+      const rect = containerRef.current!.getBoundingClientRect()
+      const startSec = Math.max(0, (e.clientX - rect.left + el.scrollLeft) / pxPerSec)
+      setSingerDragOp({ type: 'creating', singerId, startSec, endSec: startSec, containerRef })
+      const snapPts = getSnapPoints(localSingerCues.filter((c) => c.singer_id === singerId))
+      const onMove = (me: PointerEvent) => {
+        const rawEnd = Math.max(startSec, (me.clientX - rect.left + el.scrollLeft) / pxPerSec)
+        const snapped = snapToPoints(rawEnd, snapPts, pxPerSec)
+        setSingerDragOp((d) => d.type === 'creating' ? { ...d, endSec: Math.min(snapped, durationSecs) } : d)
+      }
+      const onUp = async () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        setSingerDragOp((prev) => {
+          if (prev.type !== 'creating' || prev.endSec - prev.startSec < 0.5) return { type: 'idle' }
+          onSingerCueCreate?.({
+            song_id: songId!,
+            singer_id: prev.singerId,
+            start_sec: Math.round(prev.startSec * 10) / 10,
+            end_sec: Math.round(prev.endSec * 10) / 10,
+            note: null,
+          })
+          return { type: 'idle' }
+        })
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [readonly, songId, pxPerSec, localSingerCues, durationSecs, onSingerCueCreate]
+  )
+
+  const singerOnPointerDownMove = useCallback(
+    (e: React.PointerEvent, cueId: string) => {
+      if (readonly) return
+      e.preventDefault()
+      const cue = localSingerCues.find((c) => c.id === cueId)!
+      const duration = cue.end_sec - cue.start_sec
+
+      // Alt/Option+drag: leave the original in place and drag off a copy;
+      // the copy is only persisted (as a new cue) on release.
+      if (e.altKey) {
+        const tempId = `temp-${Date.now()}`
+        const ghost: SingerCue = { ...cue, id: tempId }
+        const snapPts = getSnapPoints(localSingerCues.filter((c) => c.singer_id === cue.singer_id))
+        setLocalSingerCues((prev) => [...prev, ghost])
+        setSingerDragOp({ type: 'moving', cueId: tempId, startX: e.clientX, origStart: cue.start_sec, origEnd: cue.end_sec })
+        const onMove = (me: PointerEvent) => {
+          const dx = (me.clientX - e.clientX) / pxPerSec
+          let newStart = Math.max(0, Math.min(durationSecs - duration, cue.start_sec + dx))
+          const snappedStart = snapToPoints(newStart, snapPts, pxPerSec)
+          const snappedEnd = snapToPoints(newStart + duration, snapPts, pxPerSec)
+          if (Math.abs(snappedStart - newStart) < Math.abs(snappedEnd - (newStart + duration))) newStart = snappedStart
+          else newStart = snappedEnd - duration
+          newStart = Math.max(0, Math.min(durationSecs - duration, newStart))
+          setLocalSingerCues((prev) => prev.map((c) => c.id === tempId ? { ...c, start_sec: newStart, end_sec: newStart + duration } : c))
+        }
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove)
+          window.removeEventListener('pointerup', onUp)
+          setLocalSingerCues((prev) => {
+            const dropped = prev.find((c) => c.id === tempId)
+            if (dropped) {
+              onSingerCueCreate?.({
+                song_id: cue.song_id,
+                singer_id: cue.singer_id,
+                start_sec: dropped.start_sec,
+                end_sec: dropped.end_sec,
+                note: cue.note,
+              })
+            }
+            return prev.filter((c) => c.id !== tempId)
+          })
+          setSingerDragOp({ type: 'idle' })
+        }
+        window.addEventListener('pointermove', onMove)
+        window.addEventListener('pointerup', onUp)
+        return
+      }
+
+      setSingerDragOp({ type: 'moving', cueId, startX: e.clientX, origStart: cue.start_sec, origEnd: cue.end_sec })
+      const snapPts = getSnapPoints(localSingerCues.filter((c) => c.singer_id === cue.singer_id), cueId)
+      const onMove = (me: PointerEvent) => {
+        const dx = (me.clientX - e.clientX) / pxPerSec
+        let newStart = Math.max(0, Math.min(durationSecs - duration, cue.start_sec + dx))
+        const snappedStart = snapToPoints(newStart, snapPts, pxPerSec)
+        const snappedEnd = snapToPoints(newStart + duration, snapPts, pxPerSec)
+        if (Math.abs(snappedStart - newStart) < Math.abs(snappedEnd - (newStart + duration))) newStart = snappedStart
+        else newStart = snappedEnd - duration
+        newStart = Math.max(0, Math.min(durationSecs - duration, newStart))
+        setLocalSingerCues((prev) => prev.map((c) => c.id === cueId ? { ...c, start_sec: newStart, end_sec: newStart + duration } : c))
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        setLocalSingerCues((prev) => {
+          const updated = prev.find((c) => c.id === cueId)
+          if (updated) onSingerCueUpdate?.(cueId, { start_sec: updated.start_sec, end_sec: updated.end_sec })
+          return prev
+        })
+        setSingerDragOp({ type: 'idle' })
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [readonly, pxPerSec, localSingerCues, durationSecs, onSingerCueUpdate, onSingerCueCreate]
+  )
+
+  const singerOnPointerDownResizeLeft = useCallback(
+    (e: React.PointerEvent, cueId: string) => {
+      if (readonly) return
+      e.preventDefault()
+      const cue = localSingerCues.find((c) => c.id === cueId)!
+      setSingerDragOp({ type: 'resizing-left', cueId, startX: e.clientX, origStart: cue.start_sec, origEnd: cue.end_sec })
+      const onMove = (me: PointerEvent) => {
+        const dx = (me.clientX - e.clientX) / pxPerSec
+        const newStart = Math.max(0, Math.min(cue.end_sec - 0.5, cue.start_sec + dx))
+        setLocalSingerCues((prev) => prev.map((c) => c.id === cueId ? { ...c, start_sec: newStart } : c))
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        setLocalSingerCues((prev) => {
+          const updated = prev.find((c) => c.id === cueId)
+          if (updated) onSingerCueUpdate?.(cueId, { start_sec: updated.start_sec })
+          return prev
+        })
+        setSingerDragOp({ type: 'idle' })
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [readonly, pxPerSec, localSingerCues, onSingerCueUpdate]
+  )
+
+  const singerOnPointerDownResizeRight = useCallback(
+    (e: React.PointerEvent, cueId: string) => {
+      if (readonly) return
+      e.preventDefault()
+      const cue = localSingerCues.find((c) => c.id === cueId)!
+      setSingerDragOp({ type: 'resizing-right', cueId, startX: e.clientX, origEnd: cue.end_sec, origStart: cue.start_sec })
+      const onMove = (me: PointerEvent) => {
+        const dx = (me.clientX - e.clientX) / pxPerSec
+        const newEnd = Math.min(durationSecs, Math.max(cue.start_sec + 0.5, cue.end_sec + dx))
+        setLocalSingerCues((prev) => prev.map((c) => c.id === cueId ? { ...c, end_sec: newEnd } : c))
+      }
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+        setLocalSingerCues((prev) => {
+          const updated = prev.find((c) => c.id === cueId)
+          if (updated) onSingerCueUpdate?.(cueId, { end_sec: updated.end_sec })
+          return prev
+        })
+        setSingerDragOp({ type: 'idle' })
+      }
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [readonly, pxPerSec, localSingerCues, durationSecs, onSingerCueUpdate]
+  )
+
   // Delete key
   useEffect(() => {
     if (readonly) return
@@ -433,18 +627,20 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
       if (selectedCueId) onCueDelete?.(selectedCueId)
       if (selectedInstrumentCueId) onInstrumentCueDelete?.(selectedInstrumentCueId)
+      if (selectedSingerCueId) onSingerCueDelete?.(selectedSingerCueId)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [readonly, selectedCueId, selectedInstrumentCueId, onCueDelete, onInstrumentCueDelete])
+  }, [readonly, selectedCueId, selectedInstrumentCueId, selectedSingerCueId, onCueDelete, onInstrumentCueDelete, onSingerCueDelete])
 
   const displayCues = dragOp.type === 'idle' ? cues : localCues
   const displayInstrumentCues = instrDragOp.type === 'idle' ? instrumentCues : localInstrumentCues
+  const displaySingerCues = singerDragOp.type === 'idle' ? singerCues : localSingerCues
 
   return (
     <div
       className="relative flex-1 overflow-hidden no-select"
-      style={{ background: '#0B0C0E', cursor: dragOp.type !== 'idle' || instrDragOp.type !== 'idle' ? 'grabbing' : undefined }}
+      style={{ background: '#0B0C0E', cursor: dragOp.type !== 'idle' || instrDragOp.type !== 'idle' || singerDragOp.type !== 'idle' ? 'grabbing' : undefined }}
     >
       <div ref={scrollRef} className="overflow-x-auto overflow-y-auto h-full">
         {/* Ruler */}
@@ -475,7 +671,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
             pxPerSec={pxPerSec}
             selectedCueId={selectedInstrumentCueId}
             readonly={readonly || !activeInstrumentId}
-            onSelectCue={(id) => { onCueSelect?.(null); onInstrumentCueSelect?.(id) }}
+            onSelectCue={(id) => { onCueSelect?.(null); onSingerCueSelect?.(null); onInstrumentCueSelect?.(id) }}
             ghostCue={instrDragOp.type === 'creating'
               ? { start_sec: instrDragOp.startSec, end_sec: instrDragOp.endSec }
               : null}
@@ -495,6 +691,37 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
           />
         )}
 
+        {/* Single singer track — above cameras, below instruments */}
+        {singers.length > 0 && (
+          <TimelineTrack
+            trackLabel="VOCES"
+            trackColor="#6B6F76"
+            trackHeight={48}
+            cues={displaySingerCues}
+            durationSecs={durationSecs}
+            pxPerSec={pxPerSec}
+            selectedCueId={selectedSingerCueId}
+            readonly={readonly || !activeSingerId}
+            onSelectCue={(id) => { onCueSelect?.(null); onInstrumentCueSelect?.(null); onSingerCueSelect?.(id) }}
+            ghostCue={singerDragOp.type === 'creating'
+              ? { start_sec: singerDragOp.startSec, end_sec: singerDragOp.endSec }
+              : null}
+            getClipStyle={(cueId) => {
+              const sc = displaySingerCues.find((c) => c.id === cueId)
+              const singer = sc ? singers.find((s) => s.id === sc.singer_id) : null
+              return singer
+                ? { color: singer.color, label: singer.name, imageUrl: singer.image_url, imageFullOpacity: true }
+                : { color: '#6B6F76', label: '?', imageUrl: null }
+            }}
+            dragHandlers={readonly || !activeSingerId ? undefined : {
+              onPointerDownMove: singerOnPointerDownMove,
+              onPointerDownResizeLeft: singerOnPointerDownResizeLeft,
+              onPointerDownResizeRight: singerOnPointerDownResizeRight,
+              onPointerDownCreate: singerOnPointerDownCreate(activeSingerId!),
+            }}
+          />
+        )}
+
         {/* Camera tracks */}
         {Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1).map((camNum) => (
           <TimelineTrack
@@ -505,7 +732,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
             pxPerSec={pxPerSec}
             selectedCueId={selectedCueId}
             readonly={readonly}
-            onSelectCue={(id) => { onInstrumentCueSelect?.(null); onCueSelect?.(id) }}
+            onSelectCue={(id) => { onInstrumentCueSelect?.(null); onSingerCueSelect?.(null); onCueSelect?.(id) }}
             ghostCue={dragOp.type === 'creating' && dragOp.camNum === camNum
               ? { start_sec: dragOp.startSec, end_sec: dragOp.endSec } : null}
             dragHandlers={readonly ? undefined : {
@@ -526,7 +753,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
           pxPerSec={pxPerSec}
           selectedCueId={selectedCueId}
           readonly={readonly}
-          onSelectCue={(id) => { onInstrumentCueSelect?.(null); onCueSelect?.(id) }}
+          onSelectCue={(id) => { onInstrumentCueSelect?.(null); onSingerCueSelect?.(null); onCueSelect?.(id) }}
           ghostCue={dragOp.type === 'creating' && dragOp.camNum === MUSIC_TRACK_NUM
             ? { start_sec: dragOp.startSec, end_sec: dragOp.endSec } : null}
           dragHandlers={readonly ? undefined : {

@@ -68,3 +68,26 @@ export const INSTRUMENT_COLORS = [
   '#8B5CF6', '#EC4899', '#10B981', '#F59E0B',
   '#3B82F6', '#EF4444', '#06B6D4', '#F97316',
 ]
+
+export interface Singer {
+  id: string
+  show_id: string
+  name: string
+  color: string
+  sort_order: number
+  image_url: string | null
+}
+
+export interface SingerCue {
+  id: string
+  song_id: string
+  singer_id: string
+  start_sec: number
+  end_sec: number
+  note: string | null
+}
+
+export const SINGER_COLORS = [
+  '#F43F5E', '#14B8A6', '#A855F7', '#EAB308',
+  '#0EA5E9', '#22C55E', '#D946EF', '#FB923C',
+]

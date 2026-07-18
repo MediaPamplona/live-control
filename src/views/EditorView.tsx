@@ -6,8 +6,8 @@ import Timeline from '@/components/timeline/Timeline'
 import SongList from '@/components/SongList'
 import CueProperties from '@/components/CueProperties'
 import InstrumentList from '@/components/InstrumentList'
-import type { Cue, Song, Instrument, InstrumentCue } from '@/lib/types'
-import { CAM_COLORS, MUSIC_TRACK_NUM } from '@/lib/types'
+import type { Cue, Song, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
+import { CAM_COLORS, MUSIC_TRACK_NUM, SINGER_COLORS } from '@/lib/types'
 
 function fmtSec(sec: number) {
   const m = Math.floor(sec / 60)
@@ -146,6 +146,130 @@ function InstrumentCuePanel({
   )
 }
 
+function SingerCuePanel({
+  cue, singer, onUpdate, onDelete, onUploadSingerImage,
+}: {
+  cue: SingerCue | null
+  singer: Singer | null
+  onUpdate: (id: string, patch: Partial<Pick<SingerCue, 'start_sec' | 'end_sec' | 'note'>>) => void
+  onDelete: (id: string) => void
+  onUploadSingerImage: (singerId: string, file: File) => Promise<string | null>
+}) {
+  const [startVal, setStartVal] = useState('')
+  const [endVal, setEndVal] = useState('')
+  const [note, setNote] = useState('')
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!cue) return
+    setStartVal(fmtSec(cue.start_sec))
+    setEndVal(fmtSec(cue.end_sec))
+    setNote(cue.note ?? '')
+  }, [cue?.id, cue?.start_sec, cue?.end_sec, cue?.note])
+
+  if (!cue || !singer) return null
+
+  const commitStart = () => {
+    const sec = parseSec(startVal)
+    if (sec !== null && sec < cue.end_sec) onUpdate(cue.id, { start_sec: Math.round(sec * 10) / 10 })
+    else setStartVal(fmtSec(cue.start_sec))
+  }
+  const commitEnd = () => {
+    const sec = parseSec(endVal)
+    if (sec !== null && sec > cue.start_sec) onUpdate(cue.id, { end_sec: Math.round(sec * 10) / 10 })
+    else setEndVal(fmtSec(cue.end_sec))
+  }
+
+  return (
+    <div className="flex flex-col h-full text-xs">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+        <span className="font-display text-xs uppercase tracking-widest text-muted">Propiedades</span>
+        <button className="text-muted hover:text-tally font-mono" onClick={() => onDelete(cue.id)}>Borrar</button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-4">
+        <div>
+          <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Cantante / Solista</label>
+          <div className="mt-1 font-display text-2xl font-semibold" style={{ color: singer.color }}>
+            {singer.name}
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Inicio</label>
+            <input
+              className="mt-1 w-full bg-panel border border-border rounded px-2 py-1 font-mono text-cream outline-none focus:border-muted"
+              value={startVal}
+              onChange={(e) => setStartVal(e.target.value)}
+              onBlur={commitStart}
+              onKeyDown={(e) => e.key === 'Enter' && commitStart()}
+            />
+          </div>
+          <div>
+            <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Fin</label>
+            <input
+              className="mt-1 w-full bg-panel border border-border rounded px-2 py-1 font-mono text-cream outline-none focus:border-muted"
+              value={endVal}
+              onChange={(e) => setEndVal(e.target.value)}
+              onBlur={commitEnd}
+              onKeyDown={(e) => e.key === 'Enter' && commitEnd()}
+            />
+          </div>
+        </div>
+        <div className="font-mono text-muted" style={{ fontSize: 10 }}>
+          Duración: {(cue.end_sec - cue.start_sec).toFixed(1)}s
+        </div>
+        <div>
+          <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>
+            Foto del cantante
+          </label>
+          <p className="font-mono text-muted mt-0.5 mb-1" style={{ fontSize: 9, opacity: 0.6 }}>
+            Se aplica a todos los bloques de {singer.name}
+          </p>
+          {singer.image_url ? (
+            <div className="mt-1 relative">
+              <img src={singer.image_url} alt="" className="w-full rounded border border-border object-cover" style={{ maxHeight: 100 }} />
+            </div>
+          ) : null}
+          <button
+            className="mt-1 w-full border border-dashed border-border rounded p-3 text-muted hover:border-muted hover:text-cream transition-colors font-mono"
+            style={{ fontSize: 10 }}
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? 'Subiendo...' : singer.image_url ? 'Cambiar foto' : '+ Añadir foto'}
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              setUploading(true)
+              await onUploadSingerImage(singer.id, file)
+              setUploading(false)
+              e.target.value = ''
+            }}
+          />
+        </div>
+        <div>
+          <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Nota</label>
+          <textarea
+            className="mt-1 w-full bg-panel border border-border rounded px-2 py-1 font-mono text-cream outline-none focus:border-muted resize-none"
+            rows={2}
+            placeholder="Solo, dúo, coro..."
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            onBlur={() => onUpdate(cue.id, { note: note || null })}
+          />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 interface RecentShow { id: string; name: string; code: string; lastVisited: number }
 
 const MIN_PX = 6
@@ -158,17 +282,22 @@ export default function EditorView() {
   const {
     show, songs, cues, loading, error, saveError,
     instruments, instrumentCues,
+    singers, singerCues,
     updateShowName,
     addSong, updateSong, deleteSong, reorderSongs, uploadSongAudio,
     addCue, updateCue, deleteCue, uploadCueImage,
     addInstrument, updateInstrument, deleteInstrument, uploadInstrumentImage,
     addInstrumentCue, updateInstrumentCue, deleteInstrumentCue,
+    addSinger, updateSinger, deleteSinger, uploadSingerImage,
+    addSingerCue, updateSingerCue, deleteSingerCue,
   } = useShow({ showId })
 
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
   const [selectedCueId, setSelectedCueId] = useState<string | null>(null)
   const [selectedInstrumentCueId, setSelectedInstrumentCueId] = useState<string | null>(null)
   const [activeInstrumentId, setActiveInstrumentId] = useState<string | null>(null)
+  const [selectedSingerCueId, setSelectedSingerCueId] = useState<string | null>(null)
+  const [activeSingerId, setActiveSingerId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [nameVal, setNameVal] = useState('')
   const [copied, setCopied] = useState('')
@@ -329,17 +458,28 @@ export default function EditorView() {
 
   const handleCueSelect = useCallback((id: string | null) => {
     setSelectedCueId(id)
-    if (id) setSelectedInstrumentCueId(null)
+    if (id) { setSelectedInstrumentCueId(null); setSelectedSingerCueId(null) }
   }, [])
 
   const handleInstrumentCueSelect = useCallback((id: string | null) => {
     setSelectedInstrumentCueId(id)
     if (id) {
       setSelectedCueId(null)
+      setSelectedSingerCueId(null)
       const cue = instrumentCues.find((c) => c.id === id)
       if (cue) setActiveInstrumentId(cue.instrument_id)
     }
   }, [instrumentCues])
+
+  const handleSingerCueSelect = useCallback((id: string | null) => {
+    setSelectedSingerCueId(id)
+    if (id) {
+      setSelectedCueId(null)
+      setSelectedInstrumentCueId(null)
+      const cue = singerCues.find((c) => c.id === id)
+      if (cue) setActiveSingerId(cue.singer_id)
+    }
+  }, [singerCues])
 
   const handleDeleteCue = useCallback(
     (id: string) => {
@@ -355,6 +495,14 @@ export default function EditorView() {
       setSelectedInstrumentCueId(null)
     },
     [deleteInstrumentCue]
+  )
+
+  const handleDeleteSingerCue = useCallback(
+    (id: string) => {
+      deleteSingerCue(id)
+      setSelectedSingerCueId(null)
+    },
+    [deleteSingerCue]
   )
 
   const copyLink = (label: string, url: string) => {
@@ -513,6 +661,24 @@ export default function EditorView() {
               if (activeInstrumentId === id) setActiveInstrumentId(null)
             }}
           />
+          <InstrumentList
+            instruments={singers}
+            selectedId={activeSingerId}
+            title="Voces"
+            colors={SINGER_COLORS}
+            addPlaceholder="Nombre del cantante..."
+            onSelect={(id) => setActiveSingerId((prev) => prev === id ? null : id)}
+            onAdd={async (name) => {
+              const singer = await addSinger(name)
+              if (singer) setActiveSingerId(singer.id)
+            }}
+            onRename={(id, name) => updateSinger(id, { name })}
+            onColorChange={(id, color) => updateSinger(id, { color })}
+            onDelete={(id) => {
+              deleteSinger(id)
+              if (activeSingerId === id) setActiveSingerId(null)
+            }}
+          />
         </div>
 
         {/* Center: Timeline */}
@@ -567,6 +733,10 @@ export default function EditorView() {
                 instrumentCues={instrumentCues.filter((c) => c.song_id === selectedSong.id)}
                 selectedInstrumentCueId={selectedInstrumentCueId}
                 activeInstrumentId={activeInstrumentId}
+                singers={singers}
+                singerCues={singerCues.filter((c) => c.song_id === selectedSong.id)}
+                selectedSingerCueId={selectedSingerCueId}
+                activeSingerId={activeSingerId}
                 onSeek={handleSeek}
                 onCueCreate={handleCueCreate}
                 onCueUpdate={handleCueUpdate}
@@ -576,6 +746,10 @@ export default function EditorView() {
                 onInstrumentCueUpdate={updateInstrumentCue}
                 onInstrumentCueSelect={handleInstrumentCueSelect}
                 onInstrumentCueDelete={handleDeleteInstrumentCue}
+                onSingerCueCreate={addSingerCue}
+                onSingerCueUpdate={updateSingerCue}
+                onSingerCueSelect={handleSingerCueSelect}
+                onSingerCueDelete={handleDeleteSingerCue}
               />
 
               {/* ── Preview play bar ── */}
@@ -660,6 +834,14 @@ export default function EditorView() {
               onUpdate={updateInstrumentCue}
               onDelete={handleDeleteInstrumentCue}
               onUploadInstrumentImage={uploadInstrumentImage}
+            />
+          ) : selectedSingerCueId ? (
+            <SingerCuePanel
+              cue={singerCues.find((c) => c.id === selectedSingerCueId) ?? null}
+              singer={singers.find((s) => singerCues.find((c) => c.id === selectedSingerCueId)?.singer_id === s.id) ?? null}
+              onUpdate={updateSingerCue}
+              onDelete={handleDeleteSingerCue}
+              onUploadSingerImage={uploadSingerImage}
             />
           ) : (
             <CueProperties
