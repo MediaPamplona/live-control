@@ -300,6 +300,8 @@ export default function EditorView() {
   const [activeSingerId, setActiveSingerId] = useState<string | null>(null)
   const [editingName, setEditingName] = useState(false)
   const [nameVal, setNameVal] = useState('')
+  const [editingBpm, setEditingBpm] = useState(false)
+  const [bpmVal, setBpmVal] = useState('')
   const [copied, setCopied] = useState('')
   const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX)
   const timelineAreaRef = useRef<HTMLDivElement>(null)
@@ -505,6 +507,13 @@ export default function EditorView() {
     [deleteSingerCue]
   )
 
+  const commitBpm = () => {
+    setEditingBpm(false)
+    if (!selectedSong) return
+    const n = parseFloat(bpmVal)
+    if (!isNaN(n) && n > 0) updateSong(selectedSong.id, { bpm: n })
+  }
+
   const copyLink = (label: string, url: string) => {
     navigator.clipboard.writeText(url)
     setCopied(label)
@@ -693,6 +702,24 @@ export default function EditorView() {
                 <span className="font-mono text-muted text-xs">
                   {Math.floor(selectedSong.duration_secs / 60)}:{String(selectedSong.duration_secs % 60).padStart(2, '0')} min
                 </span>
+                {editingBpm ? (
+                  <input
+                    autoFocus
+                    className="w-14 bg-transparent border-b border-border text-cream font-mono text-xs outline-none"
+                    value={bpmVal}
+                    onChange={(e) => setBpmVal(e.target.value)}
+                    onBlur={commitBpm}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commitBpm() }}
+                  />
+                ) : (
+                  <span
+                    className="font-mono text-muted text-xs cursor-pointer hover:text-cream"
+                    onDoubleClick={() => { setBpmVal(selectedSong.bpm ? String(selectedSong.bpm) : ''); setEditingBpm(true) }}
+                    title="Doble clic para corregir el BPM detectado"
+                  >
+                    {selectedSong.bpm ? `${selectedSong.bpm} BPM` : 'BPM: sin detectar'}
+                  </span>
+                )}
                 <span className="flex-1" />
                 <span className="font-mono text-muted hidden lg:block" style={{ fontSize: 9 }}>
                   Arrastra para crear · Bordes para redimensionar · Delete para eliminar

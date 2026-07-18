@@ -27,10 +27,12 @@ export default function DirectorView() {
   const { showCode } = useParams<{ showCode: string }>()
   const navigate = useNavigate()
   const { show, songs, cues, loading, error } = useShow({ showCode })
-  const { playing, positionSec, play, pause, reset } = useClock()
+  const { playing, positionSec, speed, setSpeed, play, pause, reset } = useClock()
   const { broadcast } = useDirectorBroadcast(showCode ?? '')
   const timelineRef = useRef<TimelineHandle>(null)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
+  const [liveBpm, setLiveBpm] = useState<number | null>(null)
+  const tapTimesRef = useRef<number[]>([])
 
   useEffect(() => {
     if (songs.length > 0 && !selectedSongId) {
@@ -41,6 +43,40 @@ export default function DirectorView() {
   const selectedSong = songs.find((s) => s.id === selectedSongId)
   const songCues = selectedSong ? cues.filter((c) => c.song_id === selectedSong.id) : []
   const activeCue = getActiveCue(songCues, positionSec)
+
+  // Tap tempo — a tap more than 2s after the previous one starts a fresh sequence
+  const handleTap = useCallback(() => {
+    const now = performance.now()
+    const taps = tapTimesRef.current
+    if (taps.length && now - taps[taps.length - 1] > 2000) taps.length = 0
+    taps.push(now)
+    if (taps.length > 8) taps.shift()
+    if (taps.length < 2) { setLiveBpm(null); return }
+    const intervals = taps.slice(1).map((t, i) => t - taps[i])
+    const avgMs = intervals.reduce((a, b) => a + b, 0) / intervals.length
+    const bpm = 60000 / avgMs
+    setLiveBpm(bpm)
+    if (selectedSong?.bpm) setSpeed(bpm / selectedSong.bpm)
+  }, [selectedSong?.bpm, setSpeed])
+
+  const handleResetTempo = useCallback(() => {
+    tapTimesRef.current = []
+    setLiveBpm(null)
+    setSpeed(1)
+  }, [setSpeed])
+
+  // "T" key → tap tempo
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'KeyT') return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      handleTap()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [handleTap])
 
   // Broadcast on every tick (~100ms via RAF)
   const broadcastRef = useRef(broadcast)
@@ -72,9 +108,12 @@ export default function DirectorView() {
 
   const handleSongSelect = useCallback((id: string) => {
     reset()
+    tapTimesRef.current = []
+    setLiveBpm(null)
+    setSpeed(1)
     setSelectedSongId(id)
     timelineRef.current?.scrollToSec(0)
-  }, [reset])
+  }, [reset, setSpeed])
 
   if (loading) {
     return (
@@ -188,6 +227,40 @@ export default function DirectorView() {
           >
             {playing ? '⏸' : '▶'}
           </button>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Tap tempo */}
+        <div className="flex items-center gap-3">
+          <button
+            className="w-14 h-14 rounded-full border-2 border-border text-muted hover:text-cream hover:border-muted font-mono uppercase tracking-widest flex items-center justify-center transition-colors active:scale-95"
+            style={{ fontSize: 10 }}
+            onClick={handleTap}
+            title="Tap tempo (tecla T)"
+          >
+            TAP
+          </button>
+          <div className="text-left min-w-24">
+            <div className="font-mono font-bold tabular-nums" style={{ fontSize: 18, color: liveBpm ? '#F4F1EA' : '#6B6F76' }}>
+              {liveBpm ? Math.round(liveBpm) : '--'} <span style={{ fontSize: 10 }}>BPM</span>
+            </div>
+            <div className="font-mono text-muted" style={{ fontSize: 10 }}>
+              {selectedSong?.bpm
+                ? `ref ${selectedSong.bpm} · ${speed.toFixed(2)}x`
+                : 'sin BPM de referencia'}
+            </div>
+          </div>
+          {speed !== 1 && (
+            <button
+              className="font-mono text-muted hover:text-cream transition-colors"
+              style={{ fontSize: 9 }}
+              onClick={handleResetTempo}
+              title="Volver a velocidad de referencia (1x)"
+            >
+              ↺ 1x
+            </button>
+          )}
         </div>
 
         <div className="flex-1" />

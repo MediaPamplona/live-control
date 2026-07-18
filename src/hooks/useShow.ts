@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { analyze } from 'web-audio-beat-detector'
 import { supabase } from '@/lib/supabase'
 import type { Show, Song, Cue, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
 import { INSTRUMENT_COLORS, SINGER_COLORS } from '@/lib/types'
@@ -16,6 +17,20 @@ function getAudioDuration(file: File): Promise<number | null> {
     audio.onerror = () => cleanup(null)
     audio.src = url
   })
+}
+
+async function getAudioBpm(file: File): Promise<number | null> {
+  try {
+    const arrayBuffer = await file.arrayBuffer()
+    const ctx = new AudioContext()
+    const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+    await ctx.close()
+    const tempo = await analyze(audioBuffer, { minTempo: 50, maxTempo: 200 })
+    return Number.isFinite(tempo) ? Math.round(tempo * 10) / 10 : null
+  } catch (e) {
+    console.error('BPM detection failed:', e)
+    return null
+  }
 }
 
 interface UseShowOptions {
@@ -134,7 +149,7 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     return song
   }, [show, songs])
 
-  const updateSong = useCallback(async (id: string, patch: Partial<Pick<Song, 'title' | 'duration_secs' | 'audio_url'>>) => {
+  const updateSong = useCallback(async (id: string, patch: Partial<Pick<Song, 'title' | 'duration_secs' | 'audio_url' | 'bpm'>>) => {
     const { error: err } = await supabase.from('songs').update(patch).eq('id', id)
     if (err) { notifyError(`Error al actualizar canción: ${err.message}`); return }
     setSongs((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s))
@@ -319,8 +334,12 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     }
     const { data } = supabase.storage.from('song-audio').getPublicUrl(path)
     const url = data.publicUrl
-    const duration = await getAudioDuration(file)
-    await updateSong(songId, duration ? { audio_url: url, duration_secs: Math.round(duration) } : { audio_url: url })
+    const [duration, bpm] = await Promise.all([getAudioDuration(file), getAudioBpm(file)])
+    await updateSong(songId, {
+      audio_url: url,
+      ...(duration ? { duration_secs: Math.round(duration) } : {}),
+      ...(bpm ? { bpm } : {}),
+    })
     return url
   }, [updateSong])
 

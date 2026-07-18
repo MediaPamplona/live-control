@@ -53,10 +53,12 @@ create table if not exists public.songs (
   duration_secs integer not null default 180 check (duration_secs > 0),
   sort_order    integer not null default 0,
   audio_url     text,
+  bpm           numeric,
   created_at    timestamptz default now()
 );
 
 alter table public.songs add column if not exists audio_url text;
+alter table public.songs add column if not exists bpm numeric;
 
 create index if not exists songs_show_id_idx on public.songs(show_id);
 create index if not exists songs_order_idx   on public.songs(show_id, sort_order);

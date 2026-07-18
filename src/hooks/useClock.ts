@@ -3,10 +3,12 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 export function useClock() {
   const [playing, setPlaying] = useState(false)
   const [positionSec, setPositionSec] = useState(0)
+  const [speed, setSpeedState] = useState(1)
 
   const rafRef = useRef<number | null>(null)
   const startWallRef = useRef<number>(0)
   const posAtPlayRef = useRef<number>(0)
+  const speedRef = useRef(1)
 
   const stopRaf = useCallback(() => {
     if (rafRef.current !== null) {
@@ -21,18 +23,30 @@ export function useClock() {
     posAtPlayRef.current = positionSec
 
     const tick = () => {
-      const elapsed = (performance.now() - startWallRef.current) / 1000
+      const elapsed = ((performance.now() - startWallRef.current) / 1000) * speedRef.current
       setPositionSec(posAtPlayRef.current + elapsed)
       rafRef.current = requestAnimationFrame(tick)
     }
     rafRef.current = requestAnimationFrame(tick)
   }, [positionSec])
 
+  // Changes the playback rate from this point forward — rebases the anchor
+  // first so the current position doesn't jump when the rate changes.
+  const setSpeed = useCallback((newSpeed: number) => {
+    if (playing) {
+      const elapsed = ((performance.now() - startWallRef.current) / 1000) * speedRef.current
+      posAtPlayRef.current = posAtPlayRef.current + elapsed
+      startWallRef.current = performance.now()
+    }
+    speedRef.current = newSpeed
+    setSpeedState(newSpeed)
+  }, [playing])
+
   const pause = useCallback(() => {
     stopRaf()
     setPlaying(false)
     // Capture current position from the running animation
-    const elapsed = (performance.now() - startWallRef.current) / 1000
+    const elapsed = ((performance.now() - startWallRef.current) / 1000) * speedRef.current
     const frozen = posAtPlayRef.current + elapsed
     setPositionSec(frozen)
     posAtPlayRef.current = frozen
@@ -81,5 +95,5 @@ export function useClock() {
 
   useEffect(() => () => stopRaf(), [stopRaf])
 
-  return { playing, positionSec, play, pause, reset, seek, syncExternal }
+  return { playing, positionSec, speed, setSpeed, play, pause, reset, seek, syncExternal }
 }

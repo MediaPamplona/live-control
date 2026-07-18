@@ -12,6 +12,7 @@ export interface Song {
   duration_secs: number
   sort_order: number
   audio_url: string | null
+  bpm: number | null
 }
 
 export interface Cue {
