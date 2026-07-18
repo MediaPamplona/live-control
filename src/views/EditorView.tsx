@@ -298,6 +298,12 @@ export default function EditorView() {
   const [activeInstrumentId, setActiveInstrumentId] = useState<string | null>(null)
   const [selectedSingerCueId, setSelectedSingerCueId] = useState<string | null>(null)
   const [activeSingerId, setActiveSingerId] = useState<string | null>(null)
+  const [undoMessage, setUndoMessage] = useState<string | null>(null)
+  const undoStackRef = useRef<{ label: string; undo: () => void }[]>([])
+  const pushUndo = useCallback((entry: { label: string; undo: () => void }) => {
+    undoStackRef.current.push(entry)
+    if (undoStackRef.current.length > 50) undoStackRef.current.shift()
+  }, [])
   const [editingName, setEditingName] = useState(false)
   const [nameVal, setNameVal] = useState('')
   const [editingBpm, setEditingBpm] = useState(false)
@@ -407,6 +413,23 @@ export default function EditorView() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [playing, handlePlay, handlePause])
 
+  // Cmd/Ctrl+Z → undo last edit
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z' || e.shiftKey) return
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      e.preventDefault()
+      const entry = undoStackRef.current.pop()
+      if (!entry) return
+      entry.undo()
+      setUndoMessage(`↩ Deshecho: ${entry.label}`)
+      setTimeout(() => setUndoMessage(null), 2000)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
   // Auto-reset clock when switching songs
   const handleSongSelect = useCallback((id: string) => {
     resetClock()
@@ -418,17 +441,75 @@ export default function EditorView() {
   const handleCueCreate = useCallback(
     async (cueData: Omit<Cue, 'id'>) => {
       const created = await addCue(cueData)
-      if (created) setSelectedCueId(created.id)
+      if (created) {
+        setSelectedCueId(created.id)
+        pushUndo({ label: 'crear plano', undo: () => deleteCue(created.id) })
+      }
       return created
     },
-    [addCue]
+    [addCue, deleteCue, pushUndo]
   )
 
   const handleCueUpdate = useCallback(
     (id: string, patch: Partial<Omit<Cue, 'id' | 'song_id'>>) => {
+      const prev = cues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'editar plano',
+          undo: () => updateCue(id, {
+            start_sec: prev.start_sec, end_sec: prev.end_sec, note: prev.note, image_url: prev.image_url,
+          }),
+        })
+      }
       updateCue(id, patch)
     },
-    [updateCue]
+    [updateCue, cues, pushUndo]
+  )
+
+  const handleInstrumentCueCreate = useCallback(
+    async (cueData: Omit<InstrumentCue, 'id'>) => {
+      const created = await addInstrumentCue(cueData)
+      if (created) pushUndo({ label: 'crear bloque de instrumento', undo: () => deleteInstrumentCue(created.id) })
+      return created
+    },
+    [addInstrumentCue, deleteInstrumentCue, pushUndo]
+  )
+
+  const handleInstrumentCueUpdate = useCallback(
+    (id: string, patch: Partial<Pick<InstrumentCue, 'start_sec' | 'end_sec' | 'note'>>) => {
+      const prev = instrumentCues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'editar bloque de instrumento',
+          undo: () => updateInstrumentCue(id, { start_sec: prev.start_sec, end_sec: prev.end_sec, note: prev.note }),
+        })
+      }
+      updateInstrumentCue(id, patch)
+    },
+    [updateInstrumentCue, instrumentCues, pushUndo]
+  )
+
+  const handleSingerCueCreate = useCallback(
+    async (cueData: Omit<SingerCue, 'id'>) => {
+      const created = await addSingerCue(cueData)
+      if (created) pushUndo({ label: 'crear bloque de voz', undo: () => deleteSingerCue(created.id) })
+      return created
+    },
+    [addSingerCue, deleteSingerCue, pushUndo]
+  )
+
+  const handleSingerCueUpdate = useCallback(
+    (id: string, patch: Partial<Pick<SingerCue, 'start_sec' | 'end_sec' | 'note'>>) => {
+      const prev = singerCues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'editar bloque de voz',
+          undo: () => updateSingerCue(id, { start_sec: prev.start_sec, end_sec: prev.end_sec, note: prev.note }),
+        })
+      }
+      updateSingerCue(id, patch)
+    },
+    [updateSingerCue, singerCues, pushUndo]
   )
 
   const handleAddMusicCue = useCallback(async (songId: string) => {
@@ -485,26 +566,63 @@ export default function EditorView() {
 
   const handleDeleteCue = useCallback(
     (id: string) => {
+      const prev = cues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'borrar plano',
+          undo: () => {
+            addCue({
+              song_id: prev.song_id, camera_number: prev.camera_number,
+              start_sec: prev.start_sec, end_sec: prev.end_sec,
+              image_url: prev.image_url, note: prev.note,
+            })
+          },
+        })
+      }
       deleteCue(id)
       setSelectedCueId(null)
     },
-    [deleteCue]
+    [deleteCue, cues, addCue, pushUndo]
   )
 
   const handleDeleteInstrumentCue = useCallback(
     (id: string) => {
+      const prev = instrumentCues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'borrar bloque de instrumento',
+          undo: () => {
+            addInstrumentCue({
+              song_id: prev.song_id, instrument_id: prev.instrument_id,
+              start_sec: prev.start_sec, end_sec: prev.end_sec, note: prev.note,
+            })
+          },
+        })
+      }
       deleteInstrumentCue(id)
       setSelectedInstrumentCueId(null)
     },
-    [deleteInstrumentCue]
+    [deleteInstrumentCue, instrumentCues, addInstrumentCue, pushUndo]
   )
 
   const handleDeleteSingerCue = useCallback(
     (id: string) => {
+      const prev = singerCues.find((c) => c.id === id)
+      if (prev) {
+        pushUndo({
+          label: 'borrar bloque de voz',
+          undo: () => {
+            addSingerCue({
+              song_id: prev.song_id, singer_id: prev.singer_id,
+              start_sec: prev.start_sec, end_sec: prev.end_sec, note: prev.note,
+            })
+          },
+        })
+      }
       deleteSingerCue(id)
       setSelectedSingerCueId(null)
     },
-    [deleteSingerCue]
+    [deleteSingerCue, singerCues, addSingerCue, pushUndo]
   )
 
   const commitBpm = () => {
@@ -552,6 +670,14 @@ export default function EditorView() {
           style={{ transform: 'translateX(-50%)', background: '#2A0A0A', borderColor: '#E1262C', color: '#F4F1EA' }}
         >
           ⚠ {saveError}
+        </div>
+      )}
+      {undoMessage && (
+        <div
+          className="fixed top-3 left-1/2 z-50 font-mono text-xs px-4 py-2 rounded border"
+          style={{ transform: 'translateX(-50%)', background: '#0F1114', borderColor: '#6B6F76', color: '#F4F1EA' }}
+        >
+          {undoMessage}
         </div>
       )}
       {/* ── Top bar ── */}
@@ -769,12 +895,12 @@ export default function EditorView() {
                 onCueUpdate={handleCueUpdate}
                 onCueSelect={handleCueSelect}
                 onCueDelete={handleDeleteCue}
-                onInstrumentCueCreate={addInstrumentCue}
-                onInstrumentCueUpdate={updateInstrumentCue}
+                onInstrumentCueCreate={handleInstrumentCueCreate}
+                onInstrumentCueUpdate={handleInstrumentCueUpdate}
                 onInstrumentCueSelect={handleInstrumentCueSelect}
                 onInstrumentCueDelete={handleDeleteInstrumentCue}
-                onSingerCueCreate={addSingerCue}
-                onSingerCueUpdate={updateSingerCue}
+                onSingerCueCreate={handleSingerCueCreate}
+                onSingerCueUpdate={handleSingerCueUpdate}
                 onSingerCueSelect={handleSingerCueSelect}
                 onSingerCueDelete={handleDeleteSingerCue}
               />
@@ -858,7 +984,7 @@ export default function EditorView() {
             <InstrumentCuePanel
               cue={instrumentCues.find((c) => c.id === selectedInstrumentCueId) ?? null}
               instrument={instruments.find((i) => instrumentCues.find((c) => c.id === selectedInstrumentCueId)?.instrument_id === i.id) ?? null}
-              onUpdate={updateInstrumentCue}
+              onUpdate={handleInstrumentCueUpdate}
               onDelete={handleDeleteInstrumentCue}
               onUploadInstrumentImage={uploadInstrumentImage}
             />
@@ -866,7 +992,7 @@ export default function EditorView() {
             <SingerCuePanel
               cue={singerCues.find((c) => c.id === selectedSingerCueId) ?? null}
               singer={singers.find((s) => singerCues.find((c) => c.id === selectedSingerCueId)?.singer_id === s.id) ?? null}
-              onUpdate={updateSingerCue}
+              onUpdate={handleSingerCueUpdate}
               onDelete={handleDeleteSingerCue}
               onUploadSingerImage={uploadSingerImage}
             />
