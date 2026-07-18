@@ -18,11 +18,43 @@ interface DisplayCue {
   image_url?: string | null
 }
 
-interface Props {
+interface LabelProps {
   cameraNumber?: number
   trackLabel?: string
   trackColor?: string
   trackHeight?: number
+}
+
+// Rendered in a separate, non-scrolling column — see Timeline.tsx. Avoids
+// relying on position:sticky, which Safari can fail to keep pinned during
+// fast horizontal scrolls (labels would visibly scroll away with the content).
+export function TimelineTrackLabel({ cameraNumber, trackLabel, trackColor, trackHeight }: LabelProps) {
+  const isMusicTrack = cameraNumber === MUSIC_TRACK_NUM
+  const color = trackColor ?? (isMusicTrack ? MUSIC_COLOR : CAM_COLORS[(cameraNumber ?? 1) - 1])
+  const label = trackLabel ?? (isMusicTrack ? 'MÚSICA' : `CAM ${cameraNumber}`)
+  const height = trackHeight ?? (isMusicTrack ? 40 : 64)
+
+  return (
+    <div
+      className="flex items-center justify-center font-mono font-medium border-b border-border"
+      style={{
+        width: 56,
+        height,
+        fontSize: label.length > 6 ? 8 : 11,
+        color,
+        background: '#0F1114',
+        textAlign: 'center',
+        padding: '0 2px',
+        lineHeight: 1.2,
+        wordBreak: 'break-word',
+      }}
+    >
+      {label}
+    </div>
+  )
+}
+
+interface Props extends LabelProps {
   cues: DisplayCue[]
   durationSecs: number
   pxPerSec: number
@@ -62,27 +94,6 @@ export default function TimelineTrack({
 
   return (
     <div className="flex" style={{ height }}>
-      {/* Sticky label */}
-      <div
-        className="flex-shrink-0 flex items-center justify-center font-mono font-medium border-r border-border z-10"
-        style={{
-          width: 56,
-          fontSize: label.length > 6 ? 8 : 11,
-          color,
-          background: '#0F1114',
-          position: 'sticky',
-          left: 0,
-          textAlign: 'center',
-          padding: '0 2px',
-          lineHeight: 1.2,
-          wordBreak: 'break-word',
-          transform: 'translateZ(0)',
-          willChange: 'transform',
-        }}
-      >
-        {label}
-      </div>
-
       {/* Track body */}
       <div
         ref={containerRef}

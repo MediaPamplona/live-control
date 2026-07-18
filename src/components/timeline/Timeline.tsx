@@ -2,7 +2,7 @@ import { useRef, useState, useCallback, useEffect, useImperativeHandle, forwardR
 import type { Cue, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
 import { NUM_CAMERAS, MUSIC_TRACK_NUM, CAM_COLORS } from '@/lib/types'
 import TimelineRuler from './TimelineRuler'
-import TimelineTrack from './TimelineTrack'
+import TimelineTrack, { TimelineTrackLabel } from './TimelineTrack'
 
 const SNAP_PX = 8
 
@@ -120,6 +120,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
   ref
 ) {
   const scrollRef = useRef<HTMLDivElement>(null)
+  const labelColRef = useRef<HTMLDivElement>(null)
   const [localCues, setLocalCues] = useState<Cue[]>(cues)
   const [localInstrumentCues, setLocalInstrumentCues] = useState<InstrumentCue[]>(instrumentCues)
   const [localSingerCues, setLocalSingerCues] = useState<SingerCue[]>(singerCues)
@@ -169,11 +170,22 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     return () => el.removeEventListener('scroll', onScroll)
   }, [onSeek, playing, pxPerSec, durationSecs, readonly])
 
+  // Keep the fixed label column's vertical position in lockstep with the
+  // scrollable area — it lives outside scrollRef so it never scrolls sideways.
+  useEffect(() => {
+    const el = scrollRef.current
+    const labelCol = labelColRef.current
+    if (!el || !labelCol) return
+    const onScroll = () => { labelCol.style.transform = `translateY(${-el.scrollTop}px)` }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [])
+
   const pointerToSec = useCallback((clientX: number) => {
     const el = scrollRef.current
     if (!el) return 0
     const rect = el.getBoundingClientRect()
-    return Math.max(0, Math.min(durationSecs, (clientX - rect.left + el.scrollLeft - 56) / pxPerSec))
+    return Math.max(0, Math.min(durationSecs, (clientX - rect.left + el.scrollLeft) / pxPerSec))
   }, [durationSecs, pxPerSec])
 
   // ── Camera track drag handlers ──
@@ -661,13 +673,35 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
 
   return (
     <div
-      className="relative flex-1 overflow-hidden no-select"
+      className="relative flex-1 overflow-hidden no-select flex"
       style={{ background: '#0B0C0E', cursor: dragOp.type !== 'idle' || instrDragOp.type !== 'idle' || singerDragOp.type !== 'idle' ? 'grabbing' : undefined }}
     >
-      <div ref={scrollRef} className="overflow-x-auto overflow-y-auto h-full">
+      {/* Fixed label column — lives outside the horizontally scrolling area so
+          labels never rely on position:sticky (Safari can fail to keep those
+          pinned during fast scrolls). Vertical position is synced in JS. */}
+      <div className="flex-shrink-0 overflow-hidden border-r border-border" style={{ width: 56, background: '#0F1114' }}>
+        <div ref={labelColRef}>
+          <div style={{ height: 28 }} />
+          {instruments.length > 0 && <TimelineTrackLabel trackLabel="INST" trackColor="#6B6F76" trackHeight={48} />}
+          {singers.length > 0 && <TimelineTrackLabel trackLabel="VOCES" trackColor="#6B6F76" trackHeight={48} />}
+          {Array.from({ length: NUM_CAMERAS }, (_, i) => i + 1).map((camNum) => (
+            <div
+              key={camNum}
+              style={highlightCameraNumber === camNum ? {
+                background: `${CAM_COLORS[camNum - 1]}14`,
+                boxShadow: `inset 3px 0 0 ${CAM_COLORS[camNum - 1]}`,
+              } : undefined}
+            >
+              <TimelineTrackLabel cameraNumber={camNum} />
+            </div>
+          ))}
+          <TimelineTrackLabel cameraNumber={MUSIC_TRACK_NUM} />
+        </div>
+      </div>
+
+      <div ref={scrollRef} className="overflow-x-auto overflow-y-auto h-full flex-1">
         {/* Ruler */}
-        <div className="flex sticky top-0 z-20" style={{ background: '#0F1114' }}>
-          <div className="flex-shrink-0 border-r border-b border-border" style={{ width: 56, height: 28 }} />
+        <div className="sticky top-0 z-20" style={{ background: '#0F1114' }}>
           <div
             className="relative"
             style={{ cursor: onSeek ? 'pointer' : 'default' }}
