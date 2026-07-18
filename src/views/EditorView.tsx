@@ -571,9 +571,11 @@ export default function EditorView() {
                 onCueCreate={handleCueCreate}
                 onCueUpdate={handleCueUpdate}
                 onCueSelect={handleCueSelect}
+                onCueDelete={handleDeleteCue}
                 onInstrumentCueCreate={addInstrumentCue}
                 onInstrumentCueUpdate={updateInstrumentCue}
                 onInstrumentCueSelect={handleInstrumentCueSelect}
+                onInstrumentCueDelete={handleDeleteInstrumentCue}
               />
 
               {/* ── Preview play bar ── */}

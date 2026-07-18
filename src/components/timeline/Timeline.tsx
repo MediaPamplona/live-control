@@ -58,9 +58,11 @@ interface Props {
   onCueCreate?: (cue: Omit<Cue, 'id'>) => Promise<Cue | null>
   onCueUpdate?: (id: string, patch: Partial<Omit<Cue, 'id' | 'song_id'>>) => void
   onCueSelect?: (id: string | null) => void
+  onCueDelete?: (id: string) => void
   onInstrumentCueCreate?: (cue: Omit<InstrumentCue, 'id'>) => Promise<InstrumentCue | null>
   onInstrumentCueUpdate?: (id: string, patch: Partial<Pick<InstrumentCue, 'start_sec' | 'end_sec' | 'note'>>) => void
   onInstrumentCueSelect?: (id: string | null) => void
+  onInstrumentCueDelete?: (id: string) => void
   onSeek?: (sec: number) => void
 }
 
@@ -82,9 +84,11 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     onCueCreate,
     onCueUpdate,
     onCueSelect,
+    onCueDelete,
     onInstrumentCueCreate,
     onInstrumentCueUpdate,
     onInstrumentCueSelect,
+    onInstrumentCueDelete,
     onSeek,
   },
   ref
@@ -427,12 +431,12 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key !== 'Delete' && e.key !== 'Backspace') return
       if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') return
-      if (selectedCueId) onCueSelect?.(null)
-      if (selectedInstrumentCueId) onInstrumentCueSelect?.(null)
+      if (selectedCueId) onCueDelete?.(selectedCueId)
+      if (selectedInstrumentCueId) onInstrumentCueDelete?.(selectedInstrumentCueId)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [readonly, selectedCueId, selectedInstrumentCueId, onCueSelect, onInstrumentCueSelect])
+  }, [readonly, selectedCueId, selectedInstrumentCueId, onCueDelete, onInstrumentCueDelete])
 
   const displayCues = dragOp.type === 'idle' ? cues : localCues
   const displayInstrumentCues = instrDragOp.type === 'idle' ? instrumentCues : localInstrumentCues
