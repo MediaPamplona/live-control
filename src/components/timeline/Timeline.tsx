@@ -53,6 +53,7 @@ interface Props {
   cues: Cue[]
   durationSecs: number
   pxPerSec?: number
+  onPxPerSecChange?: (px: number) => void
   readonly?: boolean
   playing?: boolean
   selectedCueId?: string | null
@@ -88,6 +89,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     cues,
     durationSecs,
     pxPerSec = 14,
+    onPxPerSecChange,
     readonly = false,
     playing = false,
     selectedCueId = null,
@@ -180,6 +182,41 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
   }, [])
+
+  // Keep the time at the left edge stable whenever the zoom level changes
+  // (pinch or +/- buttons), instead of jumping to a random new range.
+  const prevPxPerSecRef = useRef(pxPerSec)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (el && prevPxPerSecRef.current !== pxPerSec) {
+      markProgrammaticScroll()
+      el.scrollLeft = (el.scrollLeft / prevPxPerSecRef.current) * pxPerSec
+    }
+    prevPxPerSecRef.current = pxPerSec
+  }, [pxPerSec])
+
+  // Pinch-to-zoom (two-finger touch)
+  const pinchRef = useRef<{ startDist: number; startPx: number } | null>(null)
+  const touchDistance = (touches: React.TouchList) => {
+    const dx = touches[0].clientX - touches[1].clientX
+    const dy = touches[0].clientY - touches[1].clientY
+    return Math.sqrt(dx * dx + dy * dy)
+  }
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      pinchRef.current = { startDist: touchDistance(e.touches), startPx: pxPerSec }
+    }
+  }
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && pinchRef.current && onPxPerSecChange) {
+      e.preventDefault()
+      const scale = touchDistance(e.touches) / pinchRef.current.startDist
+      onPxPerSecChange(pinchRef.current.startPx * scale)
+    }
+  }
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length < 2) pinchRef.current = null
+  }
 
   const pointerToSec = useCallback((clientX: number) => {
     const el = scrollRef.current
@@ -699,7 +736,14 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
         </div>
       </div>
 
-      <div ref={scrollRef} className="overflow-x-auto overflow-y-auto h-full flex-1">
+      <div
+        ref={scrollRef}
+        className="overflow-x-auto overflow-y-auto h-full flex-1"
+        style={{ touchAction: 'pan-x pan-y' }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
         {/* Ruler */}
         <div className="sticky top-0 z-20" style={{ background: '#0F1114' }}>
           <div

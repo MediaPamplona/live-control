@@ -7,7 +7,9 @@ import Timeline, { type TimelineHandle } from '@/components/timeline/Timeline'
 import type { Cue, ClockState } from '@/lib/types'
 import { CAM_COLORS } from '@/lib/types'
 
-const PX_PER_SEC = 8
+const MIN_PX = 3
+const MAX_PX = 40
+const DEFAULT_PX = 8
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60)
@@ -28,6 +30,7 @@ export default function CameraView() {
   const [songId, setSongId] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
   const [lastSync, setLastSync] = useState(0)
+  const [pxPerSec, setPxPerSec] = useState(DEFAULT_PX)
   const timelineRef = useRef<TimelineHandle>(null)
 
   const onClock = useCallback(
@@ -157,6 +160,19 @@ export default function CameraView() {
             En espera — mira la línea de tiempo para ver cuándo entras
           </span>
         )}
+
+        <div className="flex items-center gap-1 ml-auto flex-shrink-0">
+          <button
+            className="w-7 h-7 rounded border border-border text-muted hover:text-cream hover:border-muted font-mono text-base flex items-center justify-center transition-colors"
+            onClick={() => setPxPerSec((p) => Math.max(MIN_PX, p - 2))}
+            title="Alejar"
+          >−</button>
+          <button
+            className="w-7 h-7 rounded border border-border text-muted hover:text-cream hover:border-muted font-mono text-base flex items-center justify-center transition-colors"
+            onClick={() => setPxPerSec((p) => Math.min(MAX_PX, p + 2))}
+            title="Acercar"
+          >+</button>
+        </div>
       </div>
 
       {/* ── Timeline: instrumentos, voces y todas las cámaras ── */}
@@ -166,7 +182,8 @@ export default function CameraView() {
             ref={timelineRef}
             cues={allSongCues}
             durationSecs={selectedSong.duration_secs}
-            pxPerSec={PX_PER_SEC}
+            pxPerSec={pxPerSec}
+            onPxPerSecChange={(px) => setPxPerSec(Math.max(MIN_PX, Math.min(MAX_PX, px)))}
             readonly
             playing={playing}
             playheadSec={positionSec}
