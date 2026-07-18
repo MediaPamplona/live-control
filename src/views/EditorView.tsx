@@ -334,8 +334,12 @@ export default function EditorView() {
 
   const handleInstrumentCueSelect = useCallback((id: string | null) => {
     setSelectedInstrumentCueId(id)
-    if (id) setSelectedCueId(null)
-  }, [])
+    if (id) {
+      setSelectedCueId(null)
+      const cue = instrumentCues.find((c) => c.id === id)
+      if (cue) setActiveInstrumentId(cue.instrument_id)
+    }
+  }, [instrumentCues])
 
   const handleDeleteCue = useCallback(
     (id: string) => {
