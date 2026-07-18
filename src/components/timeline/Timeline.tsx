@@ -131,8 +131,14 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
   useEffect(() => { if (instrDragOp.type === 'idle') setLocalInstrumentCues(instrumentCues) }, [instrumentCues, instrDragOp.type])
   useEffect(() => { if (singerDragOp.type === 'idle') setLocalSingerCues(singerCues) }, [singerCues, singerDragOp.type])
 
+  // Scroll changes triggered by our own code (tape mode, resets, scrollToSec)
+  // are marked here so the user-scroll listener below can ignore them.
+  const programmaticScrollUntilRef = useRef(0)
+  const markProgrammaticScroll = () => { programmaticScrollUntilRef.current = performance.now() + 600 }
+
   useImperativeHandle(ref, () => ({
     scrollToSec(sec) {
+      markProgrammaticScroll()
       scrollRef.current?.scrollTo({ left: Math.max(0, sec * pxPerSec), behavior: 'smooth' })
     },
   }))
@@ -141,13 +147,27 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
   useEffect(() => {
     if (!playing || playheadSec == null) return
     const el = scrollRef.current
-    if (el) el.scrollLeft = Math.max(0, playheadSec * pxPerSec)
+    if (el) { markProgrammaticScroll(); el.scrollLeft = Math.max(0, playheadSec * pxPerSec) }
   }, [playing, playheadSec, pxPerSec])
 
   // Reset scroll on playhead = 0
   useEffect(() => {
-    if (playheadSec === 0) scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' })
+    if (playheadSec === 0) { markProgrammaticScroll(); scrollRef.current?.scrollTo({ left: 0, behavior: 'smooth' }) }
   }, [playheadSec])
+
+  // Two-finger / trackpad pan while paused scrubs the playhead — so pressing
+  // play afterwards resumes from wherever the timeline was panned to.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || !onSeek || readonly) return
+    const onScroll = () => {
+      if (playing) return
+      if (performance.now() < programmaticScrollUntilRef.current) return
+      onSeek(Math.max(0, Math.min(durationSecs, el.scrollLeft / pxPerSec)))
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [onSeek, playing, pxPerSec, durationSecs, readonly])
 
   const pointerToSec = useCallback((clientX: number) => {
     const el = scrollRef.current
