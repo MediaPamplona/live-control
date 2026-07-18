@@ -3,6 +3,21 @@ import { supabase } from '@/lib/supabase'
 import type { Show, Song, Cue, Instrument, InstrumentCue } from '@/lib/types'
 import { INSTRUMENT_COLORS } from '@/lib/types'
 
+function getAudioDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file)
+    const audio = document.createElement('audio')
+    audio.preload = 'metadata'
+    const cleanup = (result: number | null) => {
+      URL.revokeObjectURL(url)
+      resolve(result)
+    }
+    audio.onloadedmetadata = () => cleanup(Number.isFinite(audio.duration) ? audio.duration : null)
+    audio.onerror = () => cleanup(null)
+    audio.src = url
+  })
+}
+
 interface UseShowOptions {
   showId?: string
   showCode?: string
@@ -232,7 +247,8 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     }
     const { data } = supabase.storage.from('song-audio').getPublicUrl(path)
     const url = data.publicUrl
-    await updateSong(songId, { audio_url: url })
+    const duration = await getAudioDuration(file)
+    await updateSong(songId, duration ? { audio_url: url, duration_secs: Math.round(duration) } : { audio_url: url })
     return url
   }, [updateSong])
 
