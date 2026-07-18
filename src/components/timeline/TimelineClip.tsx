@@ -1,8 +1,72 @@
-import { CAM_COLORS } from '@/lib/types'
-import type { Cue } from '@/lib/types'
+import { useState, useEffect } from 'react'
+import { MUSIC_COLOR } from '@/lib/types'
+
+const waveCache = new Map<string, number[]>()
+
+async function buildWaveform(url: string, bars: number): Promise<number[]> {
+  if (waveCache.has(url)) return waveCache.get(url)!
+  try {
+    const res = await fetch(url)
+    const buf = await res.arrayBuffer()
+    const ctx = new AudioContext()
+    const decoded = await ctx.decodeAudioData(buf)
+    await ctx.close()
+    const data = decoded.getChannelData(0)
+    const block = Math.floor(data.length / bars)
+    const peaks: number[] = []
+    for (let i = 0; i < bars; i++) {
+      let max = 0
+      for (let j = 0; j < block; j++) {
+        const v = Math.abs(data[i * block + j])
+        if (v > max) max = v
+      }
+      peaks.push(max)
+    }
+    waveCache.set(url, peaks)
+    return peaks
+  } catch {
+    return []
+  }
+}
+
+function Waveform({ url, color, bars }: { url: string; color: string; bars: number }) {
+  const [peaks, setPeaks] = useState<number[] | null>(null)
+  useEffect(() => { buildWaveform(url, bars).then(setPeaks) }, [url, bars])
+
+  if (!peaks) {
+    return (
+      <div className="absolute inset-y-1 inset-x-6 flex items-center gap-px overflow-hidden opacity-25 pointer-events-none">
+        {Array.from({ length: Math.min(bars, 30) }, (_, i) => (
+          <div key={i} className="flex-1 rounded-sm" style={{ background: color, height: `${30 + Math.sin(i * 1.3) * 25}%` }} />
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      style={{ opacity: 0.45, padding: '4px 24px 4px 24px' }}
+      preserveAspectRatio="none"
+      viewBox={`0 0 ${peaks.length} 1`}
+    >
+      {peaks.map((p, i) => (
+        <rect key={i} x={i} y={(1 - p) / 2} width={0.8} height={p} fill={color} rx="0.1" />
+      ))}
+    </svg>
+  )
+}
 
 interface Props {
-  cue: Cue
+  id: string
+  startSec: number
+  endSec: number
+  note: string | null
+  label: string
+  color: string
+  imageUrl?: string | null
+  imageFullOpacity?: boolean
+  audioUrl?: string | null
   pxPerSec: number
   selected: boolean
   readonly: boolean
@@ -13,18 +77,14 @@ interface Props {
 }
 
 export default function TimelineClip({
-  cue,
-  pxPerSec,
-  selected,
-  readonly,
-  onSelect,
-  onPointerDownMove,
-  onPointerDownResizeLeft,
-  onPointerDownResizeRight,
+  startSec, endSec, note, label, color, imageUrl, imageFullOpacity, audioUrl,
+  pxPerSec, selected, readonly,
+  onSelect, onPointerDownMove, onPointerDownResizeLeft, onPointerDownResizeRight,
 }: Props) {
-  const left = cue.start_sec * pxPerSec
-  const width = Math.max(4, (cue.end_sec - cue.start_sec) * pxPerSec)
-  const color = CAM_COLORS[cue.camera_number - 1]
+  const left = startSec * pxPerSec
+  const width = Math.max(4, (endSec - startSec) * pxPerSec)
+  const isMusicClip = color === MUSIC_COLOR
+  const bars = Math.max(20, Math.floor(width / 4))
 
   return (
     <div
@@ -32,7 +92,7 @@ export default function TimelineClip({
       style={{
         left,
         width,
-        background: `${color}33`,
+        background: `${color}${isMusicClip ? '22' : '33'}`,
         border: `2px solid ${selected ? color : color + '88'}`,
         boxShadow: selected ? `0 0 0 1px ${color}` : undefined,
         cursor: readonly ? 'default' : 'grab',
@@ -45,35 +105,40 @@ export default function TimelineClip({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.() }}
     >
-      {/* Thumbnail */}
-      {cue.image_url && (
+      {/* Reference photo */}
+      {!isMusicClip && !audioUrl && imageUrl && (
         <img
-          src={cue.image_url}
+          src={imageUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover opacity-40 pointer-events-none"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
         />
+      )}
+
+      {/* Waveform (music cue) */}
+      {isMusicClip && audioUrl && (
+        <Waveform url={audioUrl} color={color} bars={bars} />
       )}
 
       {/* Label */}
       <span
-        className="absolute left-1 top-0 bottom-0 flex items-center font-mono text-cream pointer-events-none"
+        className="absolute left-1 top-0 bottom-0 flex items-center font-mono pointer-events-none"
         style={{ fontSize: 10, color, zIndex: 2 }}
       >
-        CAM {cue.camera_number}
-        {cue.note && <span className="ml-1 text-cream opacity-60 truncate">{cue.note}</span>}
+        {label}
+        {note && <span className="ml-1 text-cream opacity-60 truncate">{note}</span>}
       </span>
 
-      {/* Duration label */}
+      {/* Duration */}
       {width > 48 && (
         <span
           className="absolute right-2 top-0 bottom-0 flex items-center font-mono opacity-50 pointer-events-none"
           style={{ fontSize: 9, color: '#F4F1EA', zIndex: 2 }}
         >
-          {(cue.end_sec - cue.start_sec).toFixed(0)}s
+          {(endSec - startSec).toFixed(0)}s
         </span>
       )}
 
-      {/* Resize handles — editor only */}
       {!readonly && (
         <>
           <div

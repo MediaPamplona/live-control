@@ -1,6 +1,19 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+
+interface RecentShow { id: string; name: string; code: string; lastVisited: number }
+
+const RECENT_KEY = 'live-control:recent-shows'
+
+function timeAgo(ts: number): string {
+  const mins = Math.floor((Date.now() - ts) / 60000)
+  if (mins < 1) return 'ahora mismo'
+  if (mins < 60) return `hace ${mins} min`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `hace ${hrs}h`
+  return `hace ${Math.floor(hrs / 24)}d`
+}
 
 export default function HomeView() {
   const navigate = useNavigate()
@@ -10,6 +23,18 @@ export default function HomeView() {
   const [camNum, setCamNum] = useState('1')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [recentShows, setRecentShows] = useState<RecentShow[]>([])
+
+  useEffect(() => {
+    const raw = localStorage.getItem(RECENT_KEY)
+    if (raw) setRecentShows(JSON.parse(raw))
+  }, [])
+
+  const removeRecent = (id: string) => {
+    const updated = recentShows.filter((s) => s.id !== id)
+    setRecentShows(updated)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(updated))
+  }
 
   const createShow = async () => {
     if (!showName.trim()) { setError('Escribe un nombre para el show'); return }
@@ -26,8 +51,8 @@ export default function HomeView() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-10 p-6">
-      {/* Logo / title */}
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-8 p-6">
+      {/* Logo */}
       <div className="text-center">
         <div className="flex items-center gap-3 justify-center mb-2">
           <div className="w-3 h-3 rounded-full bg-tally animate-pulse" />
@@ -42,7 +67,46 @@ export default function HomeView() {
       </div>
 
       <div className="w-full max-w-md flex flex-col gap-4">
-        {/* Create new show */}
+
+        {/* ── Mis shows guardados ── */}
+        {recentShows.length > 0 && (
+          <section className="bg-panel border border-border rounded-xl p-4 flex flex-col gap-2">
+            <h2 className="font-display text-sm uppercase tracking-widest text-muted mb-1">
+              Mis shows
+            </h2>
+            {recentShows.map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center gap-2 group rounded hover:bg-panel-hover px-2 py-1.5 transition-colors"
+              >
+                <button
+                  className="flex-1 flex items-center gap-3 text-left"
+                  onClick={() => navigate(`/editor/${s.id}`)}
+                >
+                  <div className="w-2 h-2 rounded-full bg-tally flex-shrink-0" />
+                  <span className="font-display uppercase tracking-wider text-cream text-sm flex-1 truncate">
+                    {s.name}
+                  </span>
+                  <span className="font-mono text-xs bg-bg border border-border rounded px-1.5 py-0.5 text-cream flex-shrink-0">
+                    {s.code}
+                  </span>
+                  <span className="font-mono text-muted flex-shrink-0" style={{ fontSize: 10 }}>
+                    {timeAgo(s.lastVisited)}
+                  </span>
+                </button>
+                <button
+                  className="opacity-0 group-hover:opacity-100 text-muted hover:text-tally font-mono text-xs flex-shrink-0 transition-opacity"
+                  onClick={() => removeRecent(s.id)}
+                  title="Quitar de la lista"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {/* ── Nuevo show ── */}
         <section className="bg-panel border border-border rounded-xl p-5 flex flex-col gap-3">
           <h2 className="font-display text-lg uppercase tracking-widest text-cream">Nuevo show</h2>
           <input
@@ -62,7 +126,7 @@ export default function HomeView() {
           </button>
         </section>
 
-        {/* Director view */}
+        {/* ── Vista Realizador ── */}
         <section className="bg-panel border border-border rounded-xl p-5 flex flex-col gap-3">
           <h2 className="font-display text-lg uppercase tracking-widest text-cream">Vista Realizador</h2>
           <div className="flex gap-2">
@@ -84,7 +148,7 @@ export default function HomeView() {
           </div>
         </section>
 
-        {/* Camera view */}
+        {/* ── Vista Cámara ── */}
         <section className="bg-panel border border-border rounded-xl p-5 flex flex-col gap-3">
           <h2 className="font-display text-lg uppercase tracking-widest text-cream">Vista Cámara</h2>
           <div className="flex gap-2">

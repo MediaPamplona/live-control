@@ -54,6 +54,17 @@ export default function DirectorView() {
     })
   }, [playing, Math.floor(positionSec * 5) / 5, selectedSongId]) // broadcast ~5x/sec
 
+  // Spacebar → play/pause
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== 'Space') return
+      e.preventDefault()
+      playing ? pause() : play()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [playing, play, pause])
+
   const handleReset = useCallback(() => {
     reset()
     timelineRef.current?.scrollToSec(0)
@@ -126,6 +137,7 @@ export default function DirectorView() {
             durationSecs={selectedSong.duration_secs}
             pxPerSec={PX_PER_SEC}
             readonly
+            playing={playing}
             playheadSec={positionSec}
           />
         ) : (

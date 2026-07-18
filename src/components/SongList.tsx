@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   DndContext, closestCenter,
   PointerSensor, useSensor, useSensors,
@@ -18,6 +18,7 @@ function SortableSong({
   onRename,
   onDelete,
   onDurationChange,
+  onUploadAudio,
 }: {
   song: Song
   selected: boolean
@@ -25,13 +26,16 @@ function SortableSong({
   onRename: (title: string) => void
   onDelete: () => void
   onDurationChange: (secs: number) => void
+  onUploadAudio?: (file: File) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: song.id })
   const [editingTitle, setEditingTitle] = useState(false)
   const [editingDur, setEditingDur] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [titleVal, setTitleVal] = useState(song.title)
   const [durVal, setDurVal] = useState(String(song.duration_secs))
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -108,6 +112,39 @@ function SortableSong({
         </span>
       )}
 
+      {/* Audio upload */}
+      <>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file || !onUploadAudio) return
+            setUploading(true)
+            await onUploadAudio(file)
+            setUploading(false)
+            e.target.value = ''
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+        <button
+          className={`flex-shrink-0 font-mono transition-all ${
+            uploading
+              ? 'text-muted animate-pulse opacity-100'
+              : song.audio_url
+              ? 'text-green-400 opacity-100'
+              : 'text-muted opacity-0 group-hover:opacity-100 hover:text-cream'
+          }`}
+          style={{ fontSize: 13 }}
+          title={song.audio_url ? 'Audio cargado · clic para cambiar' : 'Subir audio'}
+          onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click() }}
+        >
+          ♪
+        </button>
+      </>
+
       {/* Delete */}
       <button
         className="text-muted hover:text-tally opacity-0 group-hover:opacity-100 flex-shrink-0"
@@ -130,11 +167,12 @@ interface Props {
   onDeleteSong: (id: string) => void
   onDurationChange: (id: string, secs: number) => void
   onReorder: (songs: Song[]) => void
+  onUploadAudio?: (id: string, file: File) => Promise<string | null>
 }
 
 export default function SongList({
   songs, selectedSongId, onSelectSong, onAddSong,
-  onRenameSong, onDeleteSong, onDurationChange, onReorder,
+  onRenameSong, onDeleteSong, onDurationChange, onReorder, onUploadAudio,
 }: Props) {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
@@ -176,6 +214,7 @@ export default function SongList({
                   onRename={(title) => onRenameSong(song.id, title)}
                   onDelete={() => onDeleteSong(song.id)}
                   onDurationChange={(secs) => onDurationChange(song.id, secs)}
+                  onUploadAudio={onUploadAudio ? (file) => onUploadAudio(song.id, file) : undefined}
                 />
               ))}
             </SortableContext>

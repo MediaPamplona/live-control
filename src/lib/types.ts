@@ -11,6 +11,7 @@ export interface Song {
   title: string
   duration_secs: number
   sort_order: number
+  audio_url: string | null
 }
 
 export interface Cue {
@@ -40,3 +41,30 @@ export const CAM_COLORS = [
 ]
 
 export const NUM_CAMERAS = 6
+
+// camera_number = 0 is the music track (special, max 1 cue per song)
+export const MUSIC_TRACK_NUM = 0
+export const MUSIC_COLOR = '#FBBF24' // amber
+
+export interface Instrument {
+  id: string
+  show_id: string
+  name: string
+  color: string
+  sort_order: number
+  image_url: string | null
+}
+
+export interface InstrumentCue {
+  id: string
+  song_id: string
+  instrument_id: string
+  start_sec: number
+  end_sec: number
+  note: string | null
+}
+
+export const INSTRUMENT_COLORS = [
+  '#8B5CF6', '#EC4899', '#10B981', '#F59E0B',
+  '#3B82F6', '#EF4444', '#06B6D4', '#F97316',
+]
