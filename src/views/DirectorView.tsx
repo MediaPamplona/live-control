@@ -5,7 +5,7 @@ import { useClock } from '@/hooks/useClock'
 import { useDirectorBroadcast } from '@/hooks/useRealtime'
 import Timeline, { type TimelineHandle } from '@/components/timeline/Timeline'
 import type { Cue } from '@/lib/types'
-import { CAM_COLORS } from '@/lib/types'
+import { CAM_COLORS, MUSIC_TRACK_NUM } from '@/lib/types'
 
 function fmt(sec: number) {
   const m = Math.floor(sec / 60)
@@ -26,10 +26,11 @@ function getActiveCue(cues: Cue[], positionSec: number): Cue | null {
 export default function DirectorView() {
   const { showCode } = useParams<{ showCode: string }>()
   const navigate = useNavigate()
-  const { show, songs, cues, loading, error } = useShow({ showCode })
+  const { show, songs, cues, instruments, instrumentCues, singers, singerCues, loading, error } = useShow({ showCode })
   const { playing, positionSec, speed, setSpeed, play, pause, reset } = useClock()
   const { broadcast } = useDirectorBroadcast(showCode ?? '')
   const timelineRef = useRef<TimelineHandle>(null)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const [selectedSongId, setSelectedSongId] = useState<string | null>(null)
   const [liveBpm, setLiveBpm] = useState<number | null>(null)
   const tapTimesRef = useRef<number[]>([])
@@ -42,7 +43,32 @@ export default function DirectorView() {
 
   const selectedSong = songs.find((s) => s.id === selectedSongId)
   const songCues = selectedSong ? cues.filter((c) => c.song_id === selectedSong.id) : []
+  const songInstrumentCues = selectedSong ? instrumentCues.filter((c) => c.song_id === selectedSong.id) : []
+  const songSingerCues = selectedSong ? singerCues.filter((c) => c.song_id === selectedSong.id) : []
   const activeCue = getActiveCue(songCues, positionSec)
+  const musicCue = songCues.find((c) => c.camera_number === MUSIC_TRACK_NUM)
+
+  // ── Audio playback ──
+  // Create a fresh Audio object whenever the song's audio URL changes
+  useEffect(() => {
+    const prev = audioRef.current
+    if (prev) { prev.pause(); prev.src = '' }
+    const url = selectedSong?.audio_url ?? null
+    audioRef.current = url ? new Audio(url) : null
+  }, [selectedSong?.audio_url])
+
+  // Seek sync (when paused, positionSec changes via reset/song switch)
+  useEffect(() => {
+    if (playing) return
+    const audio = audioRef.current
+    if (!audio || !selectedSong?.audio_url) return
+    audio.currentTime = Math.max(0, positionSec - (musicCue?.start_sec ?? 0))
+  }, [positionSec, playing, selectedSong?.audio_url, musicCue?.start_sec])
+
+  const positionSecRef = useRef(positionSec)
+  positionSecRef.current = positionSec
+  const musicCueRef = useRef(musicCue)
+  musicCueRef.current = musicCue
 
   // Tap tempo — a tap more than 2s after the previous one starts a fresh sequence
   const handleTap = useCallback(() => {
@@ -90,19 +116,37 @@ export default function DirectorView() {
     })
   }, [playing, Math.floor(positionSec * 5) / 5, selectedSongId]) // broadcast ~5x/sec
 
+  // Play/pause helpers — keep the audio element in lockstep with the clock
+  const handlePlay = useCallback(() => {
+    play()
+    const audio = audioRef.current
+    const pos = positionSecRef.current
+    const mc = musicCueRef.current
+    if (!audio || !selectedSong?.audio_url) return
+    audio.currentTime = Math.max(0, pos - (mc?.start_sec ?? 0))
+    audio.play().catch((e) => console.error('Audio play error:', e))
+  }, [play, selectedSong?.audio_url])
+
+  const handlePause = useCallback(() => {
+    pause()
+    audioRef.current?.pause()
+  }, [pause])
+
   // Spacebar → play/pause
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code !== 'Space') return
       e.preventDefault()
-      playing ? pause() : play()
+      playing ? handlePause() : handlePlay()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [playing, play, pause])
+  }, [playing, handlePlay, handlePause])
 
   const handleReset = useCallback(() => {
     reset()
+    audioRef.current?.pause()
+    if (audioRef.current) audioRef.current.currentTime = 0
     timelineRef.current?.scrollToSec(0)
   }, [reset])
 
@@ -178,6 +222,11 @@ export default function DirectorView() {
             readonly
             playing={playing}
             playheadSec={positionSec}
+            instruments={instruments}
+            instrumentCues={songInstrumentCues}
+            singers={singers}
+            singerCues={songSingerCues}
+            audioUrl={selectedSong.audio_url}
           />
         ) : (
           <div className="flex items-center justify-center h-full">
@@ -223,7 +272,7 @@ export default function DirectorView() {
               color: playing ? '#E1262C' : '#F4F1EA',
               background: playing ? '#E1262C22' : 'transparent',
             }}
-            onClick={playing ? pause : play}
+            onClick={playing ? handlePause : handlePlay}
           >
             {playing ? '⏸' : '▶'}
           </button>
