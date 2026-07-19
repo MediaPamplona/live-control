@@ -215,7 +215,7 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     return inst
   }, [show, instruments])
 
-  const updateInstrument = useCallback(async (id: string, patch: Partial<Pick<Instrument, 'name' | 'color'>>) => {
+  const updateInstrument = useCallback(async (id: string, patch: Partial<Pick<Instrument, 'name' | 'color' | 'emoji'>>) => {
     const { error: err } = await supabase.from('instruments').update(patch).eq('id', id)
     if (err) { notifyError(`Error al actualizar instrumento: ${err.message}`); return }
     setInstruments((prev) => prev.map((i) => i.id === id ? { ...i, ...patch } : i))
@@ -276,7 +276,7 @@ export function useShow({ showId, showCode }: UseShowOptions) {
     return singer
   }, [show, singers])
 
-  const updateSinger = useCallback(async (id: string, patch: Partial<Pick<Singer, 'name' | 'color'>>) => {
+  const updateSinger = useCallback(async (id: string, patch: Partial<Pick<Singer, 'name' | 'color' | 'emoji'>>) => {
     const { error: err } = await supabase.from('singers').update(patch).eq('id', id)
     if (err) { notifyError(`Error al actualizar cantante: ${err.message}`); return }
     setSingers((prev) => prev.map((s) => s.id === id ? { ...s, ...patch } : s))

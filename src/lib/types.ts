@@ -54,6 +54,7 @@ export interface Instrument {
   color: string
   sort_order: number
   image_url: string | null
+  emoji: string | null
 }
 
 export interface InstrumentCue {
@@ -77,6 +78,7 @@ export interface Singer {
   color: string
   sort_order: number
   image_url: string | null
+  emoji: string | null
 }
 
 export interface SingerCue {

@@ -65,6 +65,7 @@ interface Props {
   label: string
   color: string
   imageUrl?: string | null
+  emoji?: string | null
   imageFullOpacity?: boolean
   audioUrl?: string | null
   pxPerSec: number
@@ -77,7 +78,7 @@ interface Props {
 }
 
 export default function TimelineClip({
-  startSec, endSec, note, label, color, imageUrl, imageFullOpacity, audioUrl,
+  startSec, endSec, note, label, color, imageUrl, emoji, imageFullOpacity, audioUrl,
   pxPerSec, selected, readonly,
   onSelect, onPointerDownMove, onPointerDownResizeLeft, onPointerDownResizeRight,
 }: Props) {
@@ -105,8 +106,18 @@ export default function TimelineClip({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.() }}
     >
+      {/* Reference emoji — no background, takes priority over the photo */}
+      {!isMusicClip && !audioUrl && emoji && (
+        <div
+          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
+        >
+          <span style={{ fontSize: 28, lineHeight: 1 }}>{emoji}</span>
+        </div>
+      )}
+
       {/* Reference photo — anchored at the start, tiled to fill wider clips */}
-      {!isMusicClip && !audioUrl && imageUrl && (
+      {!isMusicClip && !audioUrl && !emoji && imageUrl && (
         <div
           className="absolute inset-0 pointer-events-none"
           style={{

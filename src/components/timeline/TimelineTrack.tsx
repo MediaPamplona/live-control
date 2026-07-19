@@ -65,7 +65,7 @@ interface Props extends LabelProps {
   ghostCue?: { start_sec: number; end_sec: number } | null
   audioUrl?: string | null
   // Per-clip color/label/image override (used for the single instrument track)
-  getClipStyle?: (cueId: string) => { color: string; label: string; imageUrl?: string | null; imageFullOpacity?: boolean } | undefined
+  getClipStyle?: (cueId: string) => { color: string; label: string; imageUrl?: string | null; emoji?: string | null; imageFullOpacity?: boolean } | undefined
 }
 
 export default function TimelineTrack({
@@ -129,6 +129,7 @@ export default function TimelineTrack({
               label={perClip?.label ?? (isMusicTrack ? '♪' : label)}
               color={perClip?.color ?? color}
               imageUrl={perClip?.imageUrl !== undefined ? perClip.imageUrl : cue.image_url}
+              emoji={perClip?.emoji}
               imageFullOpacity={perClip?.imageFullOpacity}
               audioUrl={isMusicTrack ? audioUrl : null}
               pxPerSec={pxPerSec}

@@ -8,6 +8,7 @@ import CueProperties from '@/components/CueProperties'
 import InstrumentList from '@/components/InstrumentList'
 import type { Cue, Song, Instrument, InstrumentCue, Singer, SingerCue } from '@/lib/types'
 import { CAM_COLORS, MUSIC_TRACK_NUM, SINGER_COLORS } from '@/lib/types'
+import { suggestEmoji } from '@/lib/emojiSuggest'
 
 function fmtSec(sec: number) {
   const m = Math.floor(sec / 60)
@@ -22,14 +23,58 @@ function parseSec(val: string): number | null {
   return isNaN(n) ? null : n
 }
 
+function EmojiField({
+  name, emoji, onChange,
+}: {
+  name: string
+  emoji: string | null
+  onChange: (emoji: string | null) => void
+}) {
+  const suggestion = suggestEmoji(name)
+  return (
+    <div>
+      <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>
+        Emoji (alternativa a la foto)
+      </label>
+      <div className="mt-1 flex gap-1.5 items-center">
+        <input
+          className="w-12 bg-panel border border-border rounded px-2 py-1.5 text-center text-xl outline-none focus:border-muted"
+          value={emoji ?? ''}
+          placeholder="＋"
+          onChange={(e) => onChange(e.target.value.trim() || null)}
+        />
+        {suggestion && suggestion !== emoji && (
+          <button
+            className="font-mono text-muted hover:text-cream transition-colors"
+            style={{ fontSize: 9 }}
+            onClick={() => onChange(suggestion)}
+          >
+            Usar {suggestion}
+          </button>
+        )}
+        {emoji && (
+          <button
+            className="font-mono text-muted hover:text-tally transition-colors ml-auto"
+            style={{ fontSize: 9 }}
+            onClick={() => onChange(null)}
+          >
+            Quitar
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function InstrumentCuePanel({
-  cue, instrument, onUpdate, onDelete, onUploadInstrumentImage,
+  cue, instrument, onUpdate, onDelete, onUploadInstrumentImage, onUpdateInstrumentEmoji,
 }: {
   cue: InstrumentCue | null
   instrument: Instrument | null
   onUpdate: (id: string, patch: Partial<Pick<InstrumentCue, 'start_sec' | 'end_sec' | 'note'>>) => void
   onDelete: (id: string) => void
   onUploadInstrumentImage: (instrumentId: string, file: File) => Promise<string | null>
+  onUpdateInstrumentEmoji: (instrumentId: string, emoji: string | null) => void
 }) {
   const [startVal, setStartVal] = useState('')
   const [endVal, setEndVal] = useState('')
@@ -130,6 +175,11 @@ function InstrumentCuePanel({
             }}
           />
         </div>
+        <EmojiField
+          name={instrument.name}
+          emoji={instrument.emoji}
+          onChange={(emoji) => onUpdateInstrumentEmoji(instrument.id, emoji)}
+        />
         <div>
           <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Nota</label>
           <textarea
@@ -147,13 +197,14 @@ function InstrumentCuePanel({
 }
 
 function SingerCuePanel({
-  cue, singer, onUpdate, onDelete, onUploadSingerImage,
+  cue, singer, onUpdate, onDelete, onUploadSingerImage, onUpdateSingerEmoji,
 }: {
   cue: SingerCue | null
   singer: Singer | null
   onUpdate: (id: string, patch: Partial<Pick<SingerCue, 'start_sec' | 'end_sec' | 'note'>>) => void
   onDelete: (id: string) => void
   onUploadSingerImage: (singerId: string, file: File) => Promise<string | null>
+  onUpdateSingerEmoji: (singerId: string, emoji: string | null) => void
 }) {
   const [startVal, setStartVal] = useState('')
   const [endVal, setEndVal] = useState('')
@@ -254,6 +305,11 @@ function SingerCuePanel({
             }}
           />
         </div>
+        <EmojiField
+          name={singer.name}
+          emoji={singer.emoji}
+          onChange={(emoji) => onUpdateSingerEmoji(singer.id, emoji)}
+        />
         <div>
           <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>Nota</label>
           <textarea
@@ -973,6 +1029,7 @@ export default function EditorView() {
               onUpdate={handleInstrumentCueUpdate}
               onDelete={handleDeleteInstrumentCue}
               onUploadInstrumentImage={uploadInstrumentImage}
+              onUpdateInstrumentEmoji={(id, emoji) => updateInstrument(id, { emoji })}
             />
           ) : selectedSingerCueId ? (
             <SingerCuePanel
@@ -981,6 +1038,7 @@ export default function EditorView() {
               onUpdate={handleSingerCueUpdate}
               onDelete={handleDeleteSingerCue}
               onUploadSingerImage={uploadSingerImage}
+              onUpdateSingerEmoji={(id, emoji) => updateSinger(id, { emoji })}
             />
           ) : (
             <CueProperties

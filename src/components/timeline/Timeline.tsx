@@ -783,7 +783,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
               const ic = displayInstrumentCues.find((c) => c.id === cueId)
               const inst = ic ? instruments.find((i) => i.id === ic.instrument_id) : null
               return inst
-                ? { color: inst.color, label: inst.name, imageUrl: inst.image_url, imageFullOpacity: true }
+                ? { color: inst.color, label: inst.name, imageUrl: inst.image_url, emoji: inst.emoji, imageFullOpacity: true }
                 : { color: '#6B6F76', label: '?', imageUrl: null }
             }}
             dragHandlers={readonly || !activeInstrumentId ? undefined : {
@@ -814,7 +814,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
               const sc = displaySingerCues.find((c) => c.id === cueId)
               const singer = sc ? singers.find((s) => s.id === sc.singer_id) : null
               return singer
-                ? { color: singer.color, label: singer.name, imageUrl: singer.image_url, imageFullOpacity: true }
+                ? { color: singer.color, label: singer.name, imageUrl: singer.image_url, emoji: singer.emoji, imageFullOpacity: true }
                 : { color: '#6B6F76', label: '?', imageUrl: null }
             }}
             dragHandlers={readonly || !activeSingerId ? undefined : {

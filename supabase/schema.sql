@@ -85,8 +85,11 @@ create table if not exists public.instruments (
   color      text    not null default '#8B5CF6',
   sort_order integer not null default 0,
   image_url  text,
+  emoji      text,
   created_at timestamptz default now()
 );
+
+alter table public.instruments add column if not exists emoji text;
 
 create index if not exists instruments_show_id_idx on public.instruments(show_id);
 create index if not exists instruments_order_idx   on public.instruments(show_id, sort_order);
@@ -113,8 +116,11 @@ create table if not exists public.singers (
   color      text    not null default '#F43F5E',
   sort_order integer not null default 0,
   image_url  text,
+  emoji      text,
   created_at timestamptz default now()
 );
+
+alter table public.singers add column if not exists emoji text;
 
 create index if not exists singers_show_id_idx on public.singers(show_id);
 create index if not exists singers_order_idx   on public.singers(show_id, sort_order);
