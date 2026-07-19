@@ -105,13 +105,17 @@ export default function TimelineClip({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.() }}
     >
-      {/* Reference photo */}
+      {/* Reference photo — anchored at the start, tiled to fill wider clips */}
       {!isMusicClip && !audioUrl && imageUrl && (
-        <img
-          src={imageUrl}
-          alt=""
-          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-          style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: `url(${imageUrl})`,
+            backgroundRepeat: 'repeat-x',
+            backgroundSize: 'auto 100%',
+            backgroundPosition: 'left center',
+            opacity: imageFullOpacity ? 1 : 0.4,
+          }}
         />
       )}
 
