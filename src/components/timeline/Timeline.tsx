@@ -123,6 +123,7 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
 ) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const labelColRef = useRef<HTMLDivElement>(null)
+  const playheadMarkerRef = useRef<HTMLDivElement>(null)
   const [localCues, setLocalCues] = useState<Cue[]>(cues)
   const [localInstrumentCues, setLocalInstrumentCues] = useState<InstrumentCue[]>(instrumentCues)
   const [localSingerCues, setLocalSingerCues] = useState<SingerCue[]>(singerCues)
@@ -146,26 +147,25 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
     },
   }))
 
-  // Tape mode
+  // Tape mode + playhead marker sync. The marker sits at a fixed spot (left: 56)
+  // while the container scrolls underneath it — but the container can't scroll
+  // past its own content bounds, so near the start/end of the song there isn't
+  // enough room left to scroll and the marker would otherwise look frozen while
+  // time keeps advancing. We read back the browser's own (possibly clamped)
+  // scrollLeft after trying to set it, and slide the marker by whatever the
+  // scroll couldn't cover, so it always reflects the real playback position.
   useEffect(() => {
-    if (!playing || playheadSec == null) return
+    if (playheadSec == null) return
     const el = scrollRef.current
-    if (el) { markProgrammaticScroll(); el.scrollLeft = Math.max(0, playheadSec * pxPerSec) }
-  }, [playing, playheadSec, pxPerSec])
-
-  // Near the start/end of the song there isn't enough content left to scroll,
-  // so the container can't keep the playhead pinned at the fixed marker
-  // position — it would otherwise look frozen while time keeps advancing.
-  // Slide the marker itself by the amount the scroll couldn't cover.
-  const [playheadOffsetPx, setPlayheadOffsetPx] = useState(0)
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el || playheadSec == null) { setPlayheadOffsetPx(0); return }
+    if (!el) return
     const desired = Math.max(0, playheadSec * pxPerSec)
-    const maxScroll = Math.max(0, el.scrollWidth - el.clientWidth)
-    const clamped = Math.min(desired, maxScroll)
-    setPlayheadOffsetPx(desired - clamped)
-  }, [playheadSec, pxPerSec, durationSecs])
+    if (playing) {
+      markProgrammaticScroll()
+      el.scrollLeft = desired
+    }
+    const offset = desired - el.scrollLeft
+    if (playheadMarkerRef.current) playheadMarkerRef.current.style.left = `${56 + offset}px`
+  }, [playing, playheadSec, pxPerSec])
 
   // Reset scroll on playhead = 0
   useEffect(() => {
@@ -893,8 +893,9 @@ const Timeline = forwardRef<TimelineHandle, Props>(function Timeline(
       {/* Fixed playhead — slides past its resting spot near the start/end when the timeline has run out of room to scroll */}
       {playheadSec != null && (
         <div
+          ref={playheadMarkerRef}
           className="absolute top-0 bottom-0 z-30 pointer-events-none"
-          style={{ left: 56 + playheadOffsetPx, width: 2, background: '#E1262C', opacity: 0.9 }}
+          style={{ left: 56, width: 2, background: '#E1262C', opacity: 0.9 }}
         >
           <div style={{
             position: 'absolute', top: 0, left: -5,
