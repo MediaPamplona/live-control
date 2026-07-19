@@ -270,8 +270,6 @@ function SingerCuePanel({
   )
 }
 
-interface RecentShow { id: string; name: string; code: string; lastVisited: number }
-
 const MIN_PX = 6
 const MAX_PX = 60
 const DEFAULT_PX = 14
@@ -338,18 +336,6 @@ export default function EditorView() {
     if (show) setNameVal(show.name)
   }, [show?.name])
 
-
-  // Save to recent shows in localStorage
-  useEffect(() => {
-    if (!show) return
-    const key = 'live-control:recent-shows'
-    const existing: RecentShow[] = JSON.parse(localStorage.getItem(key) ?? '[]')
-    const updated = [
-      { id: show.id, name: show.name, code: show.code, lastVisited: Date.now() },
-      ...existing.filter((s) => s.id !== show.id),
-    ].slice(0, 10)
-    localStorage.setItem(key, JSON.stringify(updated))
-  }, [show?.id, show?.name, show?.code])
 
   const selectedSong: Song | undefined = songs.find((s) => s.id === selectedSongId)
   const songCues: Cue[] = selectedSong ? cues.filter((c) => c.song_id === selectedSong.id) : []

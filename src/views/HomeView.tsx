@@ -2,12 +2,10 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 
-interface RecentShow { id: string; name: string; code: string; lastVisited: number }
+interface RecentShow { id: string; name: string; code: string; created_at: string }
 
-const RECENT_KEY = 'live-control:recent-shows'
-
-function timeAgo(ts: number): string {
-  const mins = Math.floor((Date.now() - ts) / 60000)
+function timeAgo(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
   if (mins < 1) return 'ahora mismo'
   if (mins < 60) return `hace ${mins} min`
   const hrs = Math.floor(mins / 60)
@@ -26,14 +24,19 @@ export default function HomeView() {
   const [recentShows, setRecentShows] = useState<RecentShow[]>([])
 
   useEffect(() => {
-    const raw = localStorage.getItem(RECENT_KEY)
-    if (raw) setRecentShows(JSON.parse(raw))
+    supabase
+      .from('shows')
+      .select('id, name, code, created_at')
+      .order('created_at', { ascending: false })
+      .limit(20)
+      .then(({ data }) => { if (data) setRecentShows(data) })
   }, [])
 
-  const removeRecent = (id: string) => {
-    const updated = recentShows.filter((s) => s.id !== id)
-    setRecentShows(updated)
-    localStorage.setItem(RECENT_KEY, JSON.stringify(updated))
+  const removeRecent = async (id: string) => {
+    if (!confirm('¿Eliminar este show para siempre? Se borrarán sus canciones y planos.')) return
+    const { error: err } = await supabase.from('shows').delete().eq('id', id)
+    if (err) { setError('No se pudo eliminar el show'); return }
+    setRecentShows((prev) => prev.filter((s) => s.id !== id))
   }
 
   const createShow = async () => {
@@ -72,7 +75,7 @@ export default function HomeView() {
         {recentShows.length > 0 && (
           <section className="bg-panel border border-border rounded-xl p-4 flex flex-col gap-2">
             <h2 className="font-display text-sm uppercase tracking-widest text-muted mb-1">
-              Mis shows
+              Shows
             </h2>
             {recentShows.map((s) => (
               <div
@@ -91,7 +94,7 @@ export default function HomeView() {
                     {s.code}
                   </span>
                   <span className="font-mono text-muted flex-shrink-0" style={{ fontSize: 10 }}>
-                    {timeAgo(s.lastVisited)}
+                    {timeAgo(s.created_at)}
                   </span>
                 </button>
                 <button
