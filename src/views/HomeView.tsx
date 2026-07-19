@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import ConfirmDialog from '@/components/ConfirmDialog'
 
 interface RecentShow { id: string; name: string; code: string; created_at: string }
 
@@ -22,6 +23,7 @@ export default function HomeView() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [recentShows, setRecentShows] = useState<RecentShow[]>([])
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -32,11 +34,14 @@ export default function HomeView() {
       .then(({ data }) => { if (data) setRecentShows(data) })
   }, [])
 
-  const removeRecent = async (id: string) => {
-    if (!confirm('¿Eliminar este show para siempre? Se borrarán sus canciones y planos.')) return
-    const { error: err } = await supabase.from('shows').delete().eq('id', id)
-    if (err) { setError('No se pudo eliminar el show'); return }
-    setRecentShows((prev) => prev.filter((s) => s.id !== id))
+  const pendingDeleteShow = recentShows.find((s) => s.id === pendingDeleteId)
+
+  const confirmDelete = async () => {
+    if (!pendingDeleteId) return
+    const { error: err } = await supabase.from('shows').delete().eq('id', pendingDeleteId)
+    if (err) { setError('No se pudo eliminar el show') }
+    else setRecentShows((prev) => prev.filter((s) => s.id !== pendingDeleteId))
+    setPendingDeleteId(null)
   }
 
   const createShow = async () => {
@@ -99,8 +104,8 @@ export default function HomeView() {
                 </button>
                 <button
                   className="opacity-0 group-hover:opacity-100 text-muted hover:text-tally font-mono text-xs flex-shrink-0 transition-opacity"
-                  onClick={() => removeRecent(s.id)}
-                  title="Quitar de la lista"
+                  onClick={() => setPendingDeleteId(s.id)}
+                  title="Eliminar show"
                 >
                   ✕
                 </button>
@@ -185,6 +190,16 @@ export default function HomeView() {
       <p className="font-mono text-muted text-center" style={{ fontSize: 10 }}>
         Centro Vida Nueva · Live Production Control
       </p>
+
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        title="Eliminar show"
+        message={`¿Seguro que quieres eliminar "${pendingDeleteShow?.name ?? ''}"? Se borrarán también sus canciones y planos. No hay vuelta atrás.`}
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        onConfirm={confirmDelete}
+        onCancel={() => setPendingDeleteId(null)}
+      />
     </div>
   )
 }

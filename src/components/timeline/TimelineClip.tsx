@@ -110,7 +110,7 @@ export default function TimelineClip({
         <img
           src={imageUrl}
           alt=""
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
           style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
         />
       )}
