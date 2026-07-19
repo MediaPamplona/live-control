@@ -1,3 +1,5 @@
+import { SYNTH_ICON } from '@/assets/synthIcon'
+
 const DICTIONARY: [RegExp, string][] = [
   // Secciones con varios instrumentos combinados (no hay un único emoji Unicode)
   [/vientos?\b/, '🎷🎺'],
@@ -7,7 +9,7 @@ const DICTIONARY: [RegExp, string][] = [
   // Instrumentos individuales
   [/bater[ií]a|tambor|percusi[oó]n|caj[oó]n/, '🥁'],
   [/guitarra|bajo/, '🎸'],
-  [/sintetizador|synth/, '🎹'],
+  [/sintetizador|synth/, SYNTH_ICON],
   [/piano|teclado|[oó]rgano/, '🎹'],
   [/viol[ií]n|viola|cello|violonchelo/, '🎻'],
   [/saxo(f[oó]n)?/, '🎷'],

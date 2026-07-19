@@ -106,8 +106,8 @@ export default function TimelineClip({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.() }}
     >
-      {/* Reference emoji — no background, tiled to fill the clip, takes priority over the photo */}
-      {!isMusicClip && !audioUrl && emoji && (
+      {/* Reference emoji (text) — no background, tiled to fill the clip, takes priority over the photo */}
+      {!isMusicClip && !audioUrl && emoji && !emoji.startsWith('data:') && (
         <div
           className="absolute inset-0 flex items-center overflow-hidden pointer-events-none"
           style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
@@ -122,6 +122,20 @@ export default function TimelineClip({
             </span>
           ))}
         </div>
+      )}
+
+      {/* Reference emoji (custom icon) — tiled the same way as a reference photo */}
+      {!isMusicClip && !audioUrl && emoji && emoji.startsWith('data:') && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage: `url(${emoji})`,
+            backgroundRepeat: 'repeat-x',
+            backgroundSize: 'auto 100%',
+            backgroundPosition: 'left center',
+            opacity: imageFullOpacity ? 1 : 0.4,
+          }}
+        />
       )}
 
       {/* Reference photo — anchored at the start, tiled to fill wider clips */}

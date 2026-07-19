@@ -31,25 +31,32 @@ function EmojiField({
   onChange: (emoji: string | null) => void
 }) {
   const suggestion = suggestEmoji(name)
+  const isImage = emoji?.startsWith('data:')
   return (
     <div>
       <label className="font-mono text-muted uppercase tracking-widest" style={{ fontSize: 9 }}>
         Emoji (alternativa a la foto)
       </label>
       <div className="mt-1 flex gap-1.5 items-center">
-        <input
-          className="w-12 bg-panel border border-border rounded px-2 py-1.5 text-center text-xl outline-none focus:border-muted"
-          value={emoji ?? ''}
-          placeholder="＋"
-          onChange={(e) => onChange(e.target.value.trim() || null)}
-        />
+        {isImage ? (
+          <div className="w-12 h-9 flex items-center justify-center bg-panel border border-border rounded">
+            <img src={emoji!} alt="" className="w-7 h-7" />
+          </div>
+        ) : (
+          <input
+            className="w-12 bg-panel border border-border rounded px-2 py-1.5 text-center text-xl outline-none focus:border-muted"
+            value={emoji ?? ''}
+            placeholder="＋"
+            onChange={(e) => onChange(e.target.value.trim() || null)}
+          />
+        )}
         {suggestion && suggestion !== emoji && (
           <button
-            className="font-mono text-muted hover:text-cream transition-colors"
+            className="font-mono text-muted hover:text-cream transition-colors flex items-center gap-1"
             style={{ fontSize: 9 }}
             onClick={() => onChange(suggestion)}
           >
-            Usar {suggestion}
+            Usar {suggestion.startsWith('data:') ? <img src={suggestion} alt="" className="w-4 h-4" /> : suggestion}
           </button>
         )}
         {emoji && (
