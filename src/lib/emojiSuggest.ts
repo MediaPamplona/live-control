@@ -1,13 +1,20 @@
 const DICTIONARY: [RegExp, string][] = [
+  // Secciones con varios instrumentos combinados (no hay un único emoji Unicode)
+  [/vientos?\b/, '🎷🎺'],
+  [/cuerdas?\b/, '🎻🎸'],
+  [/metales/, '🎺🎷'],
+
+  // Instrumentos individuales
   [/bater[ií]a|tambor|percusi[oó]n|caj[oó]n/, '🥁'],
   [/guitarra|bajo/, '🎸'],
+  [/sintetizador|synth/, '🎹'],
   [/piano|teclado|[oó]rgano/, '🎹'],
   [/viol[ií]n|viola|cello|violonchelo/, '🎻'],
-  [/saxo/, '🎷'],
-  [/trompeta|trombón|metales/, '🎺'],
+  [/saxo(f[oó]n)?/, '🎷'],
+  [/trompeta/, '🎺'],
+  [/trombón/, '🎺'],
   [/flauta/, '🪈'],
   [/voz|voces|cantante|solista|coro/, '🎤'],
-  [/violín|cuerdas/, '🎻'],
 ]
 
 export function suggestEmoji(name: string): string | null {

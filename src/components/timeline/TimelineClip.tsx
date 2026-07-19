@@ -106,13 +106,21 @@ export default function TimelineClip({
       }}
       onClick={(e) => { e.stopPropagation(); onSelect?.() }}
     >
-      {/* Reference emoji — no background, takes priority over the photo */}
+      {/* Reference emoji — no background, tiled to fill the clip, takes priority over the photo */}
       {!isMusicClip && !audioUrl && emoji && (
         <div
-          className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          className="absolute inset-0 flex items-center overflow-hidden pointer-events-none"
           style={{ opacity: imageFullOpacity ? 1 : 0.4 }}
         >
-          <span style={{ fontSize: 28, lineHeight: 1 }}>{emoji}</span>
+          {Array.from({ length: Math.ceil(width / 30) }, (_, i) => (
+            <span
+              key={i}
+              className="flex-shrink-0 flex items-center justify-center"
+              style={{ width: 30, fontSize: 22, lineHeight: 1 }}
+            >
+              {emoji}
+            </span>
+          ))}
         </div>
       )}
 
